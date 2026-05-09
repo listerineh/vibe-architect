@@ -1,0 +1,123 @@
+# VibeArchitect Project Rules
+
+> **Note**: This file works with both Cursor and Windsurf AI coding assistants.
+> Windsurf also supports `.windsurfrules` if you need IDE-specific rules.
+
+## Tech Stack
+
+### Backend
+- Framework: FastAPI (Python 3.11+)
+- AI: Vertex AI (Gemini 1.5 Pro)
+- Deployment: Google Cloud Run
+- Testing: pytest
+
+### Frontend
+- Framework: Next.js 14+ (App Router)
+- Language: TypeScript (Strict Mode)
+- Styling: Tailwind CSS v4
+- UI Components: Radix UI
+- Icons: Lucide React
+
+## Code Style
+
+### Python
+- Use type hints for all function parameters and returns
+- Follow PEP 8 naming conventions
+- Use Pydantic for data validation
+- Async/await for I/O operations
+- Keep functions under 50 lines
+
+### TypeScript
+- Strict mode enabled
+- Use functional components with hooks
+- Props must be typed with interfaces
+- No `any` types
+- Prefer `const` over `let`
+
+## Project Conventions
+
+### File Naming
+- Python: `snake_case.py`
+- TypeScript: `kebab-case.tsx` for components
+- Config files: `lowercase.config.ts`
+
+### Component Structure
+```tsx
+'use client'; // if needed
+
+import statements
+type/interface definitions
+component function
+export
+```
+
+### API Routes
+- Use RESTful conventions
+- `/api/generate` - POST - Generate and download ZIP
+- `/api/preview` - POST - Preview structure only
+
+## AI-First Guidelines
+
+### System Prompt
+- Located in `prompts/system-prompt.md`
+- Must include JSON schema inline
+- Test changes in Vertex AI Studio before deploying
+- Version prompts when making major changes
+
+### Response Validation
+- Always validate Gemini responses against Pydantic models
+- Handle JSON parsing errors gracefully
+- Log malformed responses for debugging
+
+### Context Optimization
+- Keep system prompt under 10K characters
+- Use examples sparingly (1-2 max)
+- Prioritize clarity over completeness
+
+## Testing
+
+### Backend
+```bash
+python test_vertex.py  # Integration test
+pytest                 # Unit tests (when added)
+```
+
+### Frontend
+```bash
+npm run dev           # Development server
+npm run build         # Production build
+npm run lint          # ESLint
+```
+
+## Deployment
+
+### Backend (Cloud Run)
+- Use Dockerfile for containerization
+- Set environment variables via secrets
+- Enable CORS for frontend domain
+
+### Frontend (Firebase App Hosting)
+- Use `apphosting.yaml` for config
+- Set `NEXT_PUBLIC_API_URL` to Cloud Run URL
+- Enable caching for static assets
+
+## Known Limitations
+
+- Do not attempt to generate Terraform files in V1 (use config files instead)
+- Gemini output limited to 8192 tokens (keep boilerplates focused)
+- File content must be properly escaped in JSON responses
+- Large projects (>50 files) may need multiple API calls
+
+## Security
+
+- Never commit `.env` files
+- Store GCP credentials as secrets
+- Validate all user inputs
+- Sanitize file paths in ZIP generation
+
+## Performance
+
+- Cache Vertex AI responses when possible
+- Use streaming for large ZIP files
+- Lazy load preview components
+- Debounce form inputs

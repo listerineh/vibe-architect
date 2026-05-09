@@ -1,0 +1,29 @@
+---
+/**
+ * Section Component
+ * 
+ * Semantic section wrapper with consistent spacing.
+ * Useful for organizing page content into logical sections.
+ */
+
+interface Props {
+  spacing?: 'sm' | 'md' | 'lg' | 'xl';
+  class?: string;
+  id?: string;
+}
+
+const { spacing = 'lg', class: className = '', id } = Astro.props;
+
+const spacingClasses = {
+  sm: 'py-8',
+  md: 'py-12',
+  lg: 'py-16',
+  xl: 'py-24',
+};
+
+const classes = `${spacingClasses[spacing]} ${className}`;
+---
+
+<section id={id} class={classes}>
+  <slot />
+</section>
