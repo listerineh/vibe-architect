@@ -1,0 +1,18 @@
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: '{{APP_NAME}}',
+  description: '{{APP_DESCRIPTION}}',
+};
+
+export default function {{LAYOUT_NAME}}({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="en">
+      <body>{children}</body>
+    </html>
+  );
+}

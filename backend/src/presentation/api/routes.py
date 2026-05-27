@@ -1,16 +1,28 @@
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from loguru import logger
-from src.presentation.api.schemas import ProjectRequestDTO, BoilerplateResponseDTO, GenerateRequestDTO, TechPreferencesDTO
+from src.presentation.api.schemas import (
+    ProjectRequestDTO, 
+    BoilerplateResponseDTO, 
+    GenerateRequestDTO, 
+    TechPreferencesDTO,
+    ProjectAnalysisResponseDTO,
+    ArchitectureAnalysisResponseDTO,
+    ArchitectureProposalDTO
+)
 from src.presentation.api.mappers import DTOMapper
 from src.application.use_cases.generate_boilerplate import GenerateBoilerplateUseCase
 from src.application.use_cases.preview_boilerplate import PreviewBoilerplateUseCase
+from src.application.use_cases.analyze_project import AnalyzeProjectUseCase
+from src.application.use_cases.generate_adaptive_boilerplate import GenerateAdaptiveBoilerplateUseCase
 from src.infrastructure.adapters.memory_cache import MemoryCache
 
 
 def create_router(
     generate_use_case: GenerateBoilerplateUseCase,
     preview_use_case: PreviewBoilerplateUseCase,
+    analyze_use_case: AnalyzeProjectUseCase,
+    adaptive_use_case: GenerateAdaptiveBoilerplateUseCase,
     cache: MemoryCache
 ) -> APIRouter:
     """Factory function to create API router with injected dependencies"""
@@ -98,6 +110,92 @@ Refined description:"""
             logger.exception("Full exception traceback:")
             raise HTTPException(status_code=500, detail=f"Failed to refine description: {str(e)}")
     
+    @router.post("/analyze-project", response_model=ProjectAnalysisResponseDTO)
+    async def analyze_project(request_dto: ProjectRequestDTO):
+        """Analyze project complexity and generate file tree structure"""
+        logger.info("=== ANALYZE PROJECT REQUEST ===")
+        logger.debug(f"Request DTO: {request_dto.model_dump()}")
+        
+        try:
+            # Convert DTO to domain request
+            domain_request = DTOMapper.to_project_request(request_dto)
+            
+            # Execute analysis use case
+            analysis = analyze_use_case.execute(domain_request)
+            
+            # Convert to response DTO
+            response = ProjectAnalysisResponseDTO(
+                size=analysis.size.value,
+                reasoning=analysis.reasoning,
+                tree=analysis.tree,
+                estimated_files=analysis.estimated_files,
+                complexity_score=analysis.complexity_score,
+                required_base_files=analysis.required_base_files
+            )
+            
+            logger.info(f"✅ Analysis complete: {response.size.upper()} project")
+            logger.debug(f"Response: {response.model_dump()}")
+            logger.info("=== ANALYZE PROJECT COMPLETE ===\n")
+            
+            return response
+            
+        except Exception as e:
+            logger.error(f"❌ Analysis failed: {str(e)}")
+            logger.exception("Full exception traceback:")
+            raise HTTPException(status_code=500, detail=f"Failed to analyze project: {str(e)}")
+    
+    @router.post("/propose-architectures", response_model=ArchitectureAnalysisResponseDTO)
+    async def propose_architectures(request_dto: ProjectRequestDTO):
+        """Propose appropriate architectures for the project"""
+        logger.info("=== PROPOSE ARCHITECTURES REQUEST ===")
+        logger.debug(f"Request DTO: {request_dto.model_dump()}")
+        
+        try:
+            # Convert DTO to domain request
+            domain_request = DTOMapper.to_project_request(request_dto)
+            
+            # Call AI adapter directly (no use case needed for this)
+            from src.infrastructure.adapters.vertex_ai_adapter import VertexAIAdapter
+            ai_adapter = VertexAIAdapter()
+            
+            analysis = ai_adapter.propose_architectures(
+                description=domain_request.description,
+                tech_preferences=domain_request.tech_preferences
+            )
+            
+            # Convert to response DTO
+            proposals_dto = [
+                ArchitectureProposalDTO(
+                    name=prop.name,
+                    reasoning=prop.reasoning,
+                    complexity=prop.complexity.value,
+                    pros=prop.pros,
+                    cons=prop.cons,
+                    estimated_files=prop.estimated_files,
+                    example_structure=prop.example_structure
+                )
+                for prop in analysis.proposed_architectures
+            ]
+            
+            response = ArchitectureAnalysisResponseDTO(
+                project_size=analysis.project_size,
+                complexity_score=analysis.complexity_score,
+                reasoning=analysis.reasoning,
+                proposed_architectures=proposals_dto,
+                recommended=analysis.recommended
+            )
+            
+            logger.info(f"✅ Proposed {len(proposals_dto)} architectures")
+            logger.debug(f"Recommended: {response.recommended}")
+            logger.info("=== PROPOSE ARCHITECTURES COMPLETE ===\n")
+            
+            return response
+            
+        except Exception as e:
+            logger.error(f"❌ Architecture proposal failed: {str(e)}")
+            logger.exception("Full exception traceback:")
+            raise HTTPException(status_code=500, detail=f"Failed to propose architectures: {str(e)}")
+    
     @router.post("/preview", response_model=BoilerplateResponseDTO)
     async def preview_boilerplate(request_dto: ProjectRequestDTO):
         """Preview boilerplate structure and generate ZIP for later download"""
@@ -138,6 +236,256 @@ Refined description:"""
             logger.error(f"❌ Preview failed: {str(e)}")
             logger.exception("Full exception traceback:")
             raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+    
+    @router.post("/preview-adaptive", response_model=BoilerplateResponseDTO)
+    async def preview_adaptive_boilerplate(request_dto: ProjectRequestDTO):
+        """Preview boilerplate with ADAPTIVE architecture based on complexity"""
+        logger.info("=== ADAPTIVE PREVIEW REQUEST ===")
+        logger.debug(f"Request DTO: {request_dto.model_dump()}")
+        
+        try:
+            logger.debug("Converting DTO to domain request...")
+            domain_request = DTOMapper.to_project_request(request_dto)
+            logger.debug(f"Domain request: {domain_request}")
+            
+            logger.info("Executing ADAPTIVE generation...")
+            boilerplate = adaptive_use_case.execute(domain_request)
+            logger.info(f"✅ Adaptive boilerplate generated: {boilerplate.project_metadata.name}")
+            logger.debug(f"Files generated: {len(boilerplate.file_structure)}")
+            
+            # Generate ZIP archive
+            logger.info("Generating ZIP archive...")
+            zip_buffer = generate_use_case._file_generator.create_archive(boilerplate, domain_request)
+            logger.info(f"✅ ZIP archive generated ({zip_buffer.getbuffer().nbytes} bytes)")
+            
+            # Cache both
+            session_id = cache.set(boilerplate, zip_buffer)
+            logger.info(f"Cached with session_id: {session_id}")
+            
+            # Return DTO
+            response_dto = DTOMapper.to_boilerplate_dto(boilerplate)
+            response_dto.session_id = session_id
+            
+            logger.info("=== ADAPTIVE PREVIEW COMPLETE ===\n")
+            
+            return response_dto
+            
+        except Exception as e:
+            logger.error(f"❌ Adaptive preview failed: {str(e)}")
+            logger.exception("Full exception traceback:")
+            raise HTTPException(status_code=500, detail=f"Failed to generate adaptive boilerplate: {str(e)}")
+    
+    @router.post("/generate-streaming")
+    async def generate_streaming(request_dto: ProjectRequestDTO):
+        """Generate boilerplate with real-time progress streaming (SSE)"""
+        import json
+        import asyncio
+        from src.presentation.api.streaming_schemas import StreamEvent, StreamEventType
+        
+        async def event_generator():
+            try:
+                # Step 1: Started
+                yield StreamEvent(
+                    event=StreamEventType.STARTED,
+                    progress=0,
+                    message="Starting generation..."
+                ).to_sse()
+                await asyncio.sleep(0.5)
+                
+                # Step 2: Propose architectures
+                yield StreamEvent(
+                    event=StreamEventType.PROGRESS,
+                    progress=10,
+                    message="Analyzing project and proposing architectures..."
+                ).to_sse()
+                
+                domain_request = DTOMapper.to_project_request(request_dto)
+                
+                # Call AI to propose architectures
+                from src.infrastructure.adapters.vertex_ai_adapter import VertexAIAdapter
+                ai_adapter = VertexAIAdapter()
+                
+                arch_analysis = ai_adapter.propose_architectures(
+                    description=domain_request.description,
+                    tech_preferences=domain_request.tech_preferences
+                )
+                
+                # Step 3: Architectures proposed
+                yield StreamEvent(
+                    event=StreamEventType.ARCHITECTURES_PROPOSED,
+                    progress=30,
+                    message=f"Proposed {len(arch_analysis.proposed_architectures)} architectures",
+                    data={
+                        "project_size": arch_analysis.project_size,
+                        "complexity_score": arch_analysis.complexity_score,
+                        "reasoning": arch_analysis.reasoning,
+                        "proposed_architectures": [
+                            {
+                                "name": prop.name,
+                                "reasoning": prop.reasoning,
+                                "complexity": prop.complexity.value if hasattr(prop.complexity, 'value') else prop.complexity,
+                                "pros": prop.pros,
+                                "cons": prop.cons,
+                                "estimated_files": prop.estimated_files,
+                                "example_structure": prop.example_structure
+                            }
+                            for prop in arch_analysis.proposed_architectures
+                        ],
+                        "recommended": arch_analysis.recommended
+                    }
+                ).to_sse()
+                
+                # Note: In a real implementation, we'd wait for user selection here
+                # For now, we'll use the recommended architecture
+                selected_architecture = arch_analysis.recommended
+                
+                yield StreamEvent(
+                    event=StreamEventType.ARCHITECTURE_SELECTED,
+                    progress=35,
+                    message=f"Using architecture: {selected_architecture}",
+                    data={"selected": selected_architecture}
+                ).to_sse()
+                await asyncio.sleep(0.5)
+                
+                # Step 4: Analyzing project
+                yield StreamEvent(
+                    event=StreamEventType.ANALYZING,
+                    progress=40,
+                    message="Analyzing complexity and generating file structure..."
+                ).to_sse()
+                
+                analysis = ai_adapter.analyze_project_complexity(
+                    description=domain_request.description,
+                    tech_preferences=domain_request.tech_preferences,
+                    architecture=selected_architecture
+                )
+                
+                yield StreamEvent(
+                    event=StreamEventType.PROGRESS,
+                    progress=50,
+                    message=f"Structure generated: {analysis.estimated_files} files"
+                ).to_sse()
+                await asyncio.sleep(0.5)
+                
+                # Step 5: Matching templates
+                yield StreamEvent(
+                    event=StreamEventType.MATCHING_TEMPLATES,
+                    progress=60,
+                    message="Matching template files..."
+                ).to_sse()
+                
+                # Step 6: Generating docs - Start
+                yield StreamEvent(
+                    event=StreamEventType.GENERATING_DOCS,
+                    progress=70,
+                    message="Generating AI documentation..."
+                ).to_sse()
+                await asyncio.sleep(0.3)
+                
+                # Create queue for doc generation events
+                import queue
+                import threading
+                doc_event_queue = queue.Queue()
+                
+                # Execute adaptive generation in a thread to allow event consumption
+                def run_generation():
+                    return adaptive_use_case.execute(
+                        domain_request, 
+                        selected_architecture=selected_architecture,
+                        event_queue=doc_event_queue
+                    )
+                
+                generation_thread = threading.Thread(target=lambda: doc_event_queue.put(("result", run_generation())))
+                generation_thread.start()
+                
+                # Consume events from queue while generation is running
+                boilerplate = None
+                progress_map = {
+                    "doc_readme_generated": 73,
+                    "doc_architecture_generated": 76,
+                    "doc_cursorrules_generated": 79,
+                    "doc_contributing_generated": 82,
+                    "doc_knowledge_graph_generated": 85
+                }
+                
+                while generation_thread.is_alive() or not doc_event_queue.empty():
+                    try:
+                        event_type, data = doc_event_queue.get(timeout=0.1)
+                        
+                        if event_type == "result":
+                            boilerplate = data
+                            break
+                        elif event_type in progress_map:
+                            yield StreamEvent(
+                                event=StreamEventType[event_type.upper()],
+                                progress=progress_map[event_type],
+                                message=data
+                            ).to_sse()
+                            await asyncio.sleep(0.2)
+                    except queue.Empty:
+                        await asyncio.sleep(0.1)
+                        continue
+                
+                generation_thread.join(timeout=1.0)
+                
+                if boilerplate is None:
+                    raise Exception("Generation failed to produce boilerplate")
+                
+                yield StreamEvent(
+                    event=StreamEventType.PROGRESS,
+                    progress=90,
+                    message="Documentation generated successfully"
+                ).to_sse()
+                await asyncio.sleep(0.3)
+                
+                # Step 7: Creating ZIP
+                yield StreamEvent(
+                    event=StreamEventType.PROGRESS,
+                    progress=95,
+                    message="Creating ZIP file..."
+                ).to_sse()
+                
+                zip_buffer = generate_use_case._file_generator.create_archive(boilerplate, domain_request)
+                session_id = cache.set(boilerplate, zip_buffer)
+                
+                # Step 8: Complete
+                response_dto = DTOMapper.to_boilerplate_dto(boilerplate)
+                response_dto.session_id = session_id
+                
+                yield StreamEvent(
+                    event=StreamEventType.COMPLETE,
+                    progress=100,
+                    message="Generation complete!",
+                    data={
+                        "session_id": session_id,
+                        "project_name": boilerplate.project_metadata.name,
+                        "file_structure": [{"path": f.path} for f in boilerplate.file_structure],
+                        "cursor_rules": {
+                            "focus_areas": boilerplate.cursor_rules.focus_areas
+                        },
+                        "known_limitations": boilerplate.known_limitations,
+                        "cost_optimizations": boilerplate.cost_optimizations
+                    }
+                ).to_sse()
+                
+            except Exception as e:
+                logger.error(f"❌ Streaming generation failed: {str(e)}")
+                logger.exception("Full traceback:")
+                yield StreamEvent(
+                    event=StreamEventType.ERROR,
+                    progress=0,
+                    message=f"Error: {str(e)}"
+                ).to_sse()
+        
+        return StreamingResponse(
+            event_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no"
+            }
+        )
     
     @router.post("/generate")
     async def generate_boilerplate(request_dto: GenerateRequestDTO):

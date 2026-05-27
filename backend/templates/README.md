@@ -1,61 +1,80 @@
 # VibeArchitect Templates
 
-This directory contains base templates for boilerplate generation.
+This directory contains **minimal base templates** for adaptive boilerplate generation.
 
-## How It Works
+## 🎯 New Adaptive System
 
-1. **Template files** provide the base structure (components, layouts, etc.)
-2. **AI generates** documentation and configuration files
-3. **System combines** both to create complete boilerplate
+The system now uses **AI-driven adaptive generation** instead of copying full template structures:
 
-## Template Structure
+1. **AI analyzes** project requirements and determines appropriate architecture
+2. **AI generates** all project files based on complexity (SMALL/MEDIUM/LARGE)
+3. **Template matcher** provides only essential base files when exact matches exist
+4. **Result**: Perfectly tailored projects without unnecessary boilerplate
+
+## 📁 Template Structure
 
 ```
-nextjs-base/
-├── src/
-│   ├── app/
-│   │   ├── layout.tsx       # Root layout with {{PROJECT_NAME}} placeholder
-│   │   ├── page.tsx         # Home page with placeholders
-│   │   └── globals.css      # Global styles
-│   ├── components/
-│   │   ├── ui/
-│   │   │   └── button.tsx   # Example UI component
-│   │   └── layout/          # Layout components
-│   ├── features/            # Feature modules (empty, AI suggests structure)
-│   ├── lib/
-│   │   └── utils.ts         # Utility functions
-│   ├── hooks/               # Custom hooks (empty)
-│   └── styles/              # Additional styles (empty)
-└── public/                  # Static assets (empty)
+templates/
+├── base-files/           # Exact base files (package.json, tsconfig.json, etc.)
+│   ├── nextjs/
+│   ├── react/
+│   └── astro/
+├── component-templates/  # Generic component templates with placeholders
+│   ├── nextjs/
+│   ├── react/
+│   └── astro/
+├── common-files/         # Framework-agnostic files (.gitignore, etc.)
+├── backend-configs/      # Backend service configurations
+│   ├── firebase/
+│   ├── supabase/
+│   └── ...
+└── .agents/             # AI skills for generated projects
+    └── skills/
 ```
 
-## Placeholders
+## 🔄 How It Works
 
-Templates use double curly braces for placeholders:
+### 1. AI Analysis
+- Determines project size (SMALL/MEDIUM/LARGE)
+- Proposes appropriate architectures
+- Generates complete file tree
 
-- `{{PROJECT_NAME}}` - Replaced with project name
-- `{{PROJECT_DESCRIPTION}}` - Replaced with project description
+### 2. Template Matching
+- Matches AI-generated file paths with existing templates
+- Uses exact matches for base files (package.json, tsconfig.json)
+- Uses pattern matches for components (layout.tsx, page.tsx)
 
-## AI-Generated Files
+### 3. AI Generation
+- Generates all files not found in templates
+- Creates project-specific components
+- Tailors code to exact requirements
 
-The AI generates these files based on project requirements:
+### 4. Assembly
+- Combines template files + AI-generated files
+- Adds documentation (README, ARCHITECTURE)
+- Includes AI skills and backend configs
 
-- `README.md` - Project overview
-- `ARCHITECTURE.md` - Architecture decisions
-- `KNOWLEDGE_GRAPH.md` - Dependency map
-- `CONTRIBUTING.md` - Development guidelines
-- `.cursorrules` - AI coding guidelines
-- `package.json` - Dependencies
-- `tsconfig.json` - TypeScript config
-- `next.config.mjs` - Next.js config
-- `tailwind.config.ts` - Tailwind config
-- `.env.example` - Environment variables
-- `.gitignore` - Git ignore rules
+## 🎨 Placeholders
 
-## Benefits
+Templates use double curly braces:
 
-✅ **Consistent structure** - Every project has the same base
-✅ **AI-optimized** - Clear organization for AI tools
-✅ **Faster generation** - No need to generate boilerplate code
-✅ **Customizable docs** - AI tailors documentation to project
+- `{{COMPONENT_NAME}}` - Component name from file path
+- `{{HOOK_NAME}}` - Hook name
+- `{{PAGE_NAME}}` - Page name
+- `{{APP_NAME}}` - Application name
+- `{{APP_DESCRIPTION}}` - App description
+
+## ✨ Benefits
+
+✅ **Adaptive** - Projects match their actual complexity
+✅ **No bloat** - Only necessary files are generated
+✅ **AI-optimized** - Perfect for AI-assisted development
+✅ **Flexible** - Supports any architecture pattern
 ✅ **Production-ready** - Complete with all necessary files
+
+## 🚫 What's NOT Here
+
+We **removed** full template structures (`nextjs-ts/`, `react-ts/`, etc.) because:
+- They're no longer used (AI generates everything)
+- They caused confusion and bloat
+- The new system is more flexible and accurate

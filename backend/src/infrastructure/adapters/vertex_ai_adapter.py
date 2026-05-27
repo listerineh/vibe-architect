@@ -108,10 +108,329 @@ class VertexAIAdapter(AIServicePort):
         
         raise Exception("Max retries exceeded")
     
+    def analyze_project_complexity(self, description: str, tech_preferences, architecture: str = None) -> 'ProjectAnalysis':
+        """Analyze project complexity and generate file tree structure"""
+        from src.domain.entities.project_analysis import ProjectAnalysis, ProjectSize
+        
+        logger.info(f"🔍 Analyzing project complexity for architecture: {architecture or 'auto'}...")
+        
+        # Load analysis prompt
+        project_root = Path(__file__).parent.parent.parent.parent.parent
+        prompt_path = project_root / "prompts" / "analyze-complexity.md"
+        
+        if not prompt_path.exists():
+            logger.error(f"Analysis prompt not found at {prompt_path}")
+            raise FileNotFoundError(f"Prompt file not found: {prompt_path}")
+        
+        with open(prompt_path, "r") as f:
+            prompt_template = f.read()
+        
+        # Format prompt with project details
+        backend_service = tech_preferences.backend_service.value if tech_preferences.backend_service else "none"
+        css_framework = tech_preferences.css.value if tech_preferences.css else "none"
+        
+        prompt = prompt_template.replace("{{DESCRIPTION}}", description)
+        prompt = prompt.replace("{{FRAMEWORK}}", tech_preferences.framework)
+        prompt = prompt.replace("{{LANGUAGE}}", tech_preferences.language)
+        prompt = prompt.replace("{{BACKEND_SERVICE}}", backend_service)
+        prompt = prompt.replace("{{CSS_FRAMEWORK}}", css_framework)
+        prompt = prompt.replace("{{ARCHITECTURE}}", architecture or "auto")
+        
+        logger.debug(f"Analysis prompt length: {len(prompt)} chars")
+        
+        # Call AI
+        generation_config = {
+            "temperature": 0.3,
+            "max_output_tokens": 4096,
+        }
+        
+        # Log the prompt being sent
+        logger.debug("=" * 80)
+        logger.debug("PROMPT SENT TO AI (analyze_project_complexity):")
+        logger.debug(prompt[:1000] + "..." if len(prompt) > 1000 else prompt)
+        logger.debug("=" * 80)
+        
+        try:
+            response = self._call_with_retry(prompt, generation_config)
+            raw_response = response.text.strip()
+            
+            # Log the raw response
+            logger.debug("=" * 80)
+            logger.debug("RAW AI RESPONSE (analyze_project_complexity):")
+            logger.debug(raw_response)
+            logger.debug("=" * 80)
+            logger.debug(f"Raw AI response length: {len(raw_response)} chars")
+            
+            # Clean response (remove markdown code blocks if present)
+            if raw_response.startswith("```"):
+                # Remove ```json and ``` markers
+                raw_response = raw_response.split("```")[1]
+                if raw_response.startswith("json"):
+                    raw_response = raw_response[4:].strip()
+            
+            # Parse JSON response
+            try:
+                analysis_data = json.loads(raw_response)
+            except json.JSONDecodeError as e:
+                logger.warning(f"JSON decode failed, attempting repair: {e}")
+                repaired = repair_json(raw_response)
+                analysis_data = json.loads(repaired)
+            
+            # Validate and create ProjectAnalysis
+            analysis = ProjectAnalysis(
+                size=ProjectSize(analysis_data["size"].lower()),
+                reasoning=analysis_data["reasoning"],
+                tree=analysis_data["tree"],
+                estimated_files=analysis_data["estimated_files"],
+                complexity_score=analysis_data["complexity_score"],
+                required_base_files=analysis_data.get("required_base_files", [])
+            )
+            
+            logger.info(f"✅ Analysis complete: {analysis.size.upper()} project ({analysis.estimated_files} files)")
+            logger.debug(f"Complexity score: {analysis.complexity_score}/10")
+            logger.debug(f"Required base files: {len(analysis.required_base_files)}")
+            
+            return analysis
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to analyze project complexity: {str(e)}")
+            logger.exception("Full traceback:")
+            raise
+    
+    def propose_architectures(self, description: str, tech_preferences) -> 'ArchitectureAnalysis':
+        """Propose appropriate architectures for the project"""
+        from src.domain.entities.architecture_proposal import ArchitectureAnalysis, ArchitectureProposal, ArchitectureComplexity
+        
+        logger.info("🏗️  Proposing architectures...")
+        
+        # Load architecture proposal prompt
+        project_root = Path(__file__).parent.parent.parent.parent.parent
+        prompt_path = project_root / "prompts" / "propose-architectures.md"
+        
+        if not prompt_path.exists():
+            logger.error(f"Architecture proposal prompt not found at {prompt_path}")
+            raise FileNotFoundError(f"Prompt file not found: {prompt_path}")
+        
+        with open(prompt_path, "r") as f:
+            prompt_template = f.read()
+        
+        # Format prompt
+        backend_service = tech_preferences.backend_service.value if tech_preferences.backend_service else "none"
+        css_framework = tech_preferences.css.value if tech_preferences.css else "none"
+        
+        prompt = prompt_template.replace("{{DESCRIPTION}}", description)
+        prompt = prompt.replace("{{FRAMEWORK}}", tech_preferences.framework)
+        prompt = prompt.replace("{{LANGUAGE}}", tech_preferences.language)
+        prompt = prompt.replace("{{BACKEND_SERVICE}}", backend_service)
+        prompt = prompt.replace("{{CSS_FRAMEWORK}}", css_framework)
+        
+        logger.debug(f"Architecture proposal prompt length: {len(prompt)} chars")
+        
+        # Call AI
+        generation_config = {
+            "temperature": 0.4,
+            "max_output_tokens": 8192,  # Increased to allow complete architecture proposals
+        }
+        
+        # Log the prompt being sent
+        logger.info("=" * 80)
+        logger.info("PROMPT SENT TO AI (propose_architectures):")
+        logger.info(prompt[:1000] + "..." if len(prompt) > 1000 else prompt)
+        logger.info("=" * 80)
+        
+        try:
+            response = self._call_with_retry(prompt, generation_config)
+            raw_response = response.text.strip()
+            
+            # Log the raw response
+            logger.info("=" * 80)
+            logger.info("RAW AI RESPONSE (propose_architectures):")
+            logger.info(raw_response)
+            logger.info("=" * 80)
+            logger.debug(f"Raw AI response length: {len(raw_response)} chars")
+            
+            # Clean response - remove markdown code blocks
+            if raw_response.startswith("```"):
+                raw_response = raw_response.split("```")[1]
+                if raw_response.startswith("json"):
+                    raw_response = raw_response[4:].strip()
+            
+            # Remove any trailing markdown
+            if raw_response.endswith("```"):
+                raw_response = raw_response[:-3].strip()
+            
+            # Parse JSON
+            try:
+                response_data = json.loads(raw_response)
+            except json.JSONDecodeError as e:
+                logger.warning(f"JSON decode failed: {e}")
+                logger.debug(f"Problematic JSON (first 500 chars): {raw_response[:500]}")
+                try:
+                    # Try to repair the JSON
+                    repaired = repair_json(raw_response)
+                    response_data = json.loads(repaired)
+                    logger.info("✅ JSON repaired successfully")
+                except Exception as repair_error:
+                    logger.error(f"❌ JSON repair also failed: {repair_error}")
+                    logger.error(f"Full response: {raw_response}")
+                    raise
+            
+            # Convert to ArchitectureAnalysis
+            proposals = []
+            for arch_data in response_data.get("proposed_architectures", []):
+                # Normalize complexity value (handle "low-medium" -> "medium", etc.)
+                complexity_str = arch_data["complexity"].lower()
+                if "medium" in complexity_str:
+                    complexity_value = "medium"
+                elif "high" in complexity_str:
+                    complexity_value = "high"
+                else:
+                    complexity_value = "low"
+                
+                proposals.append(ArchitectureProposal(
+                    name=arch_data["name"],
+                    reasoning=arch_data["reasoning"],
+                    complexity=ArchitectureComplexity(complexity_value),
+                    pros=arch_data["pros"],
+                    cons=arch_data["cons"],
+                    estimated_files=arch_data["estimated_files"],
+                    example_structure=arch_data["example_structure"]
+                ))
+            
+            # Get recommended index (default to 0 if not provided)
+            recommended_idx = response_data.get("recommended", 0)
+            
+            analysis = ArchitectureAnalysis(
+                project_size=response_data["project_size"],
+                complexity_score=response_data["complexity_score"],
+                reasoning=response_data["reasoning"],
+                proposed_architectures=proposals,
+                recommended=recommended_idx
+            )
+            
+            logger.info(f"✅ Proposed {len(proposals)} architectures for {analysis.project_size.upper()} project")
+            logger.debug(f"Recommended: {analysis.recommended}")
+            
+            return analysis
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to propose architectures: {str(e)}")
+            logger.exception("Full traceback:")
+            raise
+    
+    def generate_files(
+        self, 
+        files_to_generate: List[str], 
+        project_context: Dict
+    ) -> List['FileStructure']:
+        """
+        Generate file contents using AI for files not found in templates
+        
+        Args:
+            files_to_generate: List of file paths to generate
+            project_context: Dict with description, size, tree, tech preferences
+        
+        Returns:
+            List of FileStructure objects with generated content
+        """
+        from src.domain.entities.project import FileStructure
+        
+        if not files_to_generate:
+            logger.info("No files to generate")
+            return []
+        
+        logger.info(f"🤖 Generating {len(files_to_generate)} files with AI...")
+        
+        # Load generation prompt
+        project_root = Path(__file__).parent.parent.parent.parent.parent
+        prompt_path = project_root / "prompts" / "generate-files.md"
+        
+        if not prompt_path.exists():
+            logger.error(f"Generation prompt not found at {prompt_path}")
+            raise FileNotFoundError(f"Prompt file not found: {prompt_path}")
+        
+        with open(prompt_path, "r") as f:
+            prompt_template = f.read()
+        
+        # Format files list
+        files_list = "\n".join(f"- {file}" for file in files_to_generate)
+        
+        # Format tree
+        tree_str = "\n".join(project_context.get("tree", []))
+        
+        # Format prompt
+        prompt = prompt_template.replace("{{SIZE}}", project_context.get("size", "medium").upper())
+        prompt = prompt.replace("{{DESCRIPTION}}", project_context.get("description", ""))
+        prompt = prompt.replace("{{FRAMEWORK}}", project_context.get("tech", {}).get("framework", ""))
+        prompt = prompt.replace("{{LANGUAGE}}", project_context.get("tech", {}).get("language", ""))
+        prompt = prompt.replace("{{BACKEND_SERVICE}}", project_context.get("tech", {}).get("backend_service", "none"))
+        prompt = prompt.replace("{{CSS_FRAMEWORK}}", project_context.get("tech", {}).get("css", ""))
+        prompt = prompt.replace("{{ARCHITECTURE}}", project_context.get("architecture", "auto"))
+        prompt = prompt.replace("{{TREE}}", tree_str)
+        prompt = prompt.replace("{{FILES_TO_GENERATE}}", files_list)
+        
+        logger.debug(f"Generation prompt length: {len(prompt)} chars")
+        logger.debug(f"Files to generate: {files_to_generate}")
+        
+        # Call AI
+        generation_config = {
+            "temperature": 0.4,
+            "max_output_tokens": 8192,
+        }
+        
+        # Log the prompt being sent
+        logger.debug("=" * 80)
+        logger.debug("PROMPT SENT TO AI (generate_files):")
+        logger.debug(prompt[:1000] + "..." if len(prompt) > 1000 else prompt)
+        logger.debug("=" * 80)
+        
+        try:
+            response = self._call_with_retry(prompt, generation_config)
+            raw_response = response.text.strip()
+            
+            # Log the raw response
+            logger.debug("=" * 80)
+            logger.debug("RAW AI RESPONSE (generate_files):")
+            logger.debug(raw_response[:2000] + "..." if len(raw_response) > 2000 else raw_response)
+            logger.debug("=" * 80)
+            logger.debug(f"Raw AI response length: {len(raw_response)} chars")
+            
+            # Clean response
+            if raw_response.startswith("```"):
+                raw_response = raw_response.split("```")[1]
+                if raw_response.startswith("json"):
+                    raw_response = raw_response[4:].strip()
+            
+            # Parse JSON
+            try:
+                response_data = json.loads(raw_response)
+            except json.JSONDecodeError as e:
+                logger.warning(f"JSON decode failed, attempting repair: {e}")
+                repaired = repair_json(raw_response)
+                response_data = json.loads(repaired)
+            
+            # Convert to FileStructure objects
+            generated_files = []
+            for file_data in response_data.get("files", []):
+                generated_files.append(FileStructure(
+                    path=file_data["path"],
+                    content=file_data["content"],
+                    description=f"AI-generated {Path(file_data['path']).name}"
+                ))
+            
+            logger.info(f"✅ Generated {len(generated_files)} files successfully")
+            
+            return generated_files
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to generate files: {str(e)}")
+            logger.exception("Full traceback:")
+            raise
+    
     def _load_system_prompt(self) -> str:
         """Load system prompt from file"""
-        backend_dir = Path(__file__).parent.parent.parent.parent
-        prompt_path = backend_dir.parent / "prompts" / "system-prompt.md"
+        project_root = Path(__file__).parent.parent.parent.parent.parent
+        prompt_path = project_root / "prompts" / "system-prompt.md"
         
         if not prompt_path.exists():
             logger.warning(f"System prompt not found at {prompt_path}")
@@ -120,107 +439,126 @@ class VertexAIAdapter(AIServicePort):
         with open(prompt_path, "r") as f:
             return f.read()
     
-    async def _generate_readme(self, request: ProjectRequest, framework: str, language: str, backend_service: str) -> str:
-        """Generate README.md using AI"""
-        branding_footer = "\n\n---\n\n<div align=\"center\">\n\n**Generated with ❤️ by [VibeArchitect](https://vibearchitect.dev)**\n\n*AI-First Boilerplate Generator - Optimized for Cursor & Windsurf*\n\n</div>"
+    async def _generate_readme(self, request: ProjectRequest, framework: str, language: str, backend_service: str, architecture: str, size: str, complexity: int, tree: list) -> str:
+        """Generate README.md using AI with custom prompt"""
+        # Load README prompt
+        project_root = Path(__file__).parent.parent.parent.parent.parent
+        prompt_path = project_root / "prompts" / "generate-readme.md"
         
-        prompt = f"""Generate a comprehensive README.md for this project:
-
-**Project Description:** {request.description}
-**Framework:** {framework}
-**Language:** {language}
-**Backend Service:** {backend_service if backend_service != "none" else "None"}
-**CSS Framework:** {request.tech_preferences.css.value}
-
-Create a professional README.md with:
-1. Project title and description
-2. Tech stack badges (Next.js, TypeScript, Tailwind, {backend_service if backend_service != "none" else ""}
-3. Quick start guide (installation, setup, run)
-4. Project structure overview
-5. Key features
-6. Environment variables needed
-7. Deployment instructions
-
-Make it AI-friendly with clear structure and semantic organization.
-Output ONLY the markdown content, no JSON wrapper."""
-
+        if not prompt_path.exists():
+            logger.error(f"README prompt not found at {prompt_path}")
+            raise FileNotFoundError(f"Prompt file not found: {prompt_path}")
+        
+        with open(prompt_path, "r") as f:
+            prompt_template = f.read()
+        
+        # Format tree
+        tree_str = "\n".join(tree[:30])  # Limit to first 30 lines
+        if len(tree) > 30:
+            tree_str += f"\n... and {len(tree) - 30} more files"
+        
+        # Format prompt
+        prompt = prompt_template.replace("{{DESCRIPTION}}", request.description)
+        prompt = prompt.replace("{{FRAMEWORK}}", framework)
+        prompt = prompt.replace("{{LANGUAGE}}", language)
+        prompt = prompt.replace("{{BACKEND_SERVICE}}", backend_service if backend_service != "none" else "None")
+        prompt = prompt.replace("{{CSS_FRAMEWORK}}", request.tech_preferences.css.value if request.tech_preferences.css else "None")
+        prompt = prompt.replace("{{ARCHITECTURE}}", architecture)
+        prompt = prompt.replace("{{SIZE}}", size.upper())
+        prompt = prompt.replace("{{COMPLEXITY}}", str(complexity))
+        prompt = prompt.replace("{{TREE}}", tree_str)
+        
         try:
             response = self._call_with_retry(
                 prompt,
                 generation_config={
                     "temperature": 0.5,
-                    "max_output_tokens": 8192,  # Maximum for Gemini 2.5 Flash
+                    "max_output_tokens": 8192,
                 }
             )
-            return response.text.strip() + branding_footer
+            return response.text.strip()
         except Exception as e:
             logger.error(f"Failed to generate README: {e}")
-            return f"# {request.description}\n\nGenerated boilerplate project.{branding_footer}"
+            return f"# {request.description}\n\nGenerated boilerplate project.\n\n---\n\n**Generated with ❤️ by [VibeArchitect](https://vibearchitect.dev)**\n\n*AI-First Boilerplate Generator - Optimized for Cursor & Windsurf*"
     
-    async def _generate_architecture(self, request: ProjectRequest, project_structure: str, framework: str, backend_service: str) -> str:
-        """Generate ARCHITECTURE.md using AI"""
-        branding_footer = "\n\n---\n\n<div align=\"center\">\n\n**Generated with ❤️ by [VibeArchitect](https://vibearchitect.dev)**\n\n*AI-First Boilerplate Generator - Optimized for Cursor & Windsurf*\n\n</div>"
+    async def _generate_architecture(self, request: ProjectRequest, framework: str, language: str, backend_service: str, architecture: str, size: str, complexity: int, reasoning: str, tree: list) -> str:
+        """Generate ARCHITECTURE.md using AI with custom prompt"""
+        # Load ARCHITECTURE prompt
+        project_root = Path(__file__).parent.parent.parent.parent.parent
+        prompt_path = project_root / "prompts" / "generate-architecture.md"
         
-        prompt = f"""Generate a comprehensive ARCHITECTURE.md for this project:
-
-**Project Description:** {request.description}
-**Framework:** {framework}
-**Backend Service:** {backend_service if backend_service != "none" else "None"}
-
-**Project Structure:**
-{project_structure}
-
-Create detailed architecture documentation with:
-1. Overview and design philosophy
-2. Architecture pattern (Feature-Sliced Design)
-3. Folder structure rationale
-4. Data flow explanation
-5. Key design decisions
-6. Performance optimizations
-7. Security considerations
-
-Make it AI-friendly with clear explanations.
-Output ONLY the markdown content, no JSON wrapper."""
-
+        if not prompt_path.exists():
+            logger.error(f"ARCHITECTURE prompt not found at {prompt_path}")
+            raise FileNotFoundError(f"Prompt file not found: {prompt_path}")
+        
+        with open(prompt_path, "r") as f:
+            prompt_template = f.read()
+        
+        # Format tree
+        tree_str = "\n".join(tree[:30])
+        if len(tree) > 30:
+            tree_str += f"\n... and {len(tree) - 30} more files"
+        
+        # Format prompt
+        prompt = prompt_template.replace("{{DESCRIPTION}}", request.description)
+        prompt = prompt.replace("{{FRAMEWORK}}", framework)
+        prompt = prompt.replace("{{LANGUAGE}}", language)
+        prompt = prompt.replace("{{BACKEND_SERVICE}}", backend_service if backend_service != "none" else "None")
+        prompt = prompt.replace("{{CSS_FRAMEWORK}}", request.tech_preferences.css.value if request.tech_preferences.css else "None")
+        prompt = prompt.replace("{{ARCHITECTURE}}", architecture)
+        prompt = prompt.replace("{{SIZE}}", size.upper())
+        prompt = prompt.replace("{{COMPLEXITY}}", str(complexity))
+        prompt = prompt.replace("{{REASONING}}", reasoning)
+        prompt = prompt.replace("{{TREE}}", tree_str)
+        
         try:
             response = self._call_with_retry(
                 prompt,
                 generation_config={
                     "temperature": 0.4,
-                    "max_output_tokens": 8192,  # Maximum for Gemini 2.5 Flash
+                    "max_output_tokens": 8192,
                 }
             )
-            return response.text.strip() + branding_footer
+            return response.text.strip()
         except Exception as e:
             logger.error(f"Failed to generate ARCHITECTURE: {e}")
-            return f"# Architecture\n\n{project_structure}{branding_footer}"
+            return f"# Architecture\n\n{tree_str}\n\n---\n\n**Generated with ❤️ by [VibeArchitect](https://vibearchitect.dev)**\n\n*AI-First Boilerplate Generator - Optimized for Cursor & Windsurf*"
     
-    async def _generate_cursorrules(self, request: ProjectRequest, framework: str, language: str, backend_service: str) -> str:
-        """Generate .cursorrules using AI"""
-        prompt = f"""Generate a .cursorrules file for this project:
-
-**Project Description:** {request.description}
-**Framework:** {framework}
-**Language:** {language}
-**Backend Service:** {backend_service if backend_service != "none" else "None"}
-**CSS Framework:** {request.tech_preferences.css.value}
-
-Create AI coding guidelines with:
-1. Tech stack summary
-2. Naming conventions (components, utilities, types, hooks)
-3. Patterns to follow (Server Components, Feature-Sliced Design)
-4. Focus areas (type-safety, performance, accessibility)
-5. Things to avoid (any types, inline styles, large components)
-
-Make it concise and actionable for AI assistants.
-Output ONLY the file content, no markdown wrapper."""
-
+    async def _generate_cursorrules(self, request: ProjectRequest, framework: str, language: str, backend_service: str, architecture: str, size: str, complexity: int, tree: list) -> str:
+        """Generate .cursorrules using AI with custom prompt"""
+        # Load .cursorrules prompt
+        project_root = Path(__file__).parent.parent.parent.parent.parent
+        prompt_path = project_root / "prompts" / "generate-cursorrules.md"
+        
+        if not prompt_path.exists():
+            logger.error(f".cursorrules prompt not found at {prompt_path}")
+            raise FileNotFoundError(f"Prompt file not found: {prompt_path}")
+        
+        with open(prompt_path, "r") as f:
+            prompt_template = f.read()
+        
+        # Format tree
+        tree_str = "\n".join(tree[:30])
+        if len(tree) > 30:
+            tree_str += f"\n... and {len(tree) - 30} more files"
+        
+        # Format prompt
+        prompt = prompt_template.replace("{{DESCRIPTION}}", request.description)
+        prompt = prompt.replace("{{FRAMEWORK}}", framework)
+        prompt = prompt.replace("{{LANGUAGE}}", language)
+        prompt = prompt.replace("{{BACKEND_SERVICE}}", backend_service if backend_service != "none" else "None")
+        prompt = prompt.replace("{{CSS_FRAMEWORK}}", request.tech_preferences.css.value if request.tech_preferences.css else "None")
+        prompt = prompt.replace("{{ARCHITECTURE}}", architecture)
+        prompt = prompt.replace("{{SIZE}}", size.upper())
+        prompt = prompt.replace("{{COMPLEXITY}}", str(complexity))
+        prompt = prompt.replace("{{TREE}}", tree_str)
+        
         try:
             response = self._call_with_retry(
                 prompt,
                 generation_config={
                     "temperature": 0.3,
-                    "max_output_tokens": 8192,  # Maximum for Gemini 2.5 Flash
+                    "max_output_tokens": 8192,
                 }
             )
             return response.text.strip()
@@ -315,557 +653,6 @@ Output ONLY valid JSON, no markdown wrapper."""
                     "Enable code splitting and lazy loading"
                 ]
             }
-    
-    async def generate_boilerplate(self, request: ProjectRequest) -> Boilerplate:
-        """Generate boilerplate using multiple specialized AI calls"""
-        # Use mock if enabled in settings
-        if self._settings.use_mock:
-            logger.info("🎭 Mock mode enabled, using mock data")
-            return self._generate_mock_boilerplate(request)
-        
-        # For Vertex AI, check if initialized instead of API key
-        if not self._initialized:
-            logger.warning("⚠️  Vertex AI not initialized, using mock data")
-            return self._generate_mock_boilerplate(request)
-        
-        try:
-            # Extract tech preferences
-            framework = request.tech_preferences.framework if hasattr(request.tech_preferences, 'framework') else "nextjs"
-            language = request.tech_preferences.language if hasattr(request.tech_preferences, 'language') else "typescript"
-            
-            # Convert backend_service enum to string value
-            backend_service_raw = request.tech_preferences.backend_service if hasattr(request.tech_preferences, 'backend_service') else "none"
-            backend_service = backend_service_raw.value if hasattr(backend_service_raw, 'value') else str(backend_service_raw)
-            
-            # Convert css_framework enum to string value
-            css_framework_raw = request.tech_preferences.css if hasattr(request.tech_preferences, 'css') else "tailwind"
-            css_framework = css_framework_raw.value if hasattr(css_framework_raw, 'value') else str(css_framework_raw)
-            
-            # Generate project structure for context
-            project_structure = self._template_service.get_project_structure(
-                framework, language, backend_service, css_framework
-            )
-            
-            logger.info("🚀 Starting AI calls for documentation...")
-            
-            # Make calls with slight delay to avoid rate limit burst
-            import asyncio
-            
-            # Call in batches to avoid hitting rate limits
-            logger.debug("📝 Generating README and ARCHITECTURE...")
-            readme, architecture = await asyncio.gather(
-                self._generate_readme(request, framework, language, backend_service),
-                self._generate_architecture(request, project_structure, framework, backend_service),
-                return_exceptions=True
-            )
-            
-            # Small delay between batches to avoid rate limits
-            await asyncio.sleep(2.0)  # 2 seconds to stay under RPM limits
-            
-            logger.debug("📝 Generating .cursorrules and metadata...")
-            cursorrules, metadata = await asyncio.gather(
-                self._generate_cursorrules(request, framework, language, backend_service),
-                self._generate_metadata(request, framework, backend_service),
-                return_exceptions=True
-            )
-            
-            logger.info("✅ All AI calls completed")
-            
-            # Handle exceptions in responses
-            if isinstance(readme, Exception):
-                logger.error(f"README generation failed: {readme}")
-                readme = f"# {request.description}\n\nGenerated boilerplate project."
-            if isinstance(architecture, Exception):
-                logger.error(f"ARCHITECTURE generation failed: {architecture}")
-                architecture = f"# Architecture\n\n{project_structure}"
-            if isinstance(cursorrules, Exception):
-                logger.error(f".cursorrules generation failed: {cursorrules}")
-                cursorrules = f"# {request.description}\n\n## Tech Stack\n- {framework}\n- {language}"
-            if isinstance(metadata, Exception):
-                logger.error(f"Metadata generation failed: {metadata}")
-                metadata = {
-                    "focus_areas": ["type-safety", "performance", "accessibility"],
-                    "known_limitations": ["Configuration required"],
-                    "cost_optimizations": ["Optimize for production"]
-                }
-            
-            # Load template files
-            template_name = self._template_service.get_template_name(framework, language, backend_service, css_framework)
-            template_files = self._template_service.load_template_files(template_name)
-            
-            # Add backend files
-            if backend_service != "none":
-                backend_files = self._template_service.get_backend_config_files(backend_service, language)
-                for file in backend_files:
-                    if file.path.startswith('.env'):
-                        template_files.append(file)
-                    else:
-                        filename = file.path.split('/')[-1]
-                        mapped_file = FileStructure(
-                            path=f"src/lib/{filename}",
-                            content=file.content,
-                            description=file.description
-                        )
-                        template_files.append(mapped_file)
-                logger.info(f"✅ Added {len(backend_files)} {backend_service} configuration files")
-            
-            # Add CSS files
-            if css_framework == "scss":
-                css_files = self._template_service.get_css_config_files(css_framework)
-                template_files.extend(css_files)
-            
-            # Debug: Check if package.json exists before update
-            pkg_exists_before = any(f.path == "package.json" for f in template_files)
-            logger.debug(f"📦 package.json in template_files BEFORE update: {pkg_exists_before}")
-            if pkg_exists_before:
-                logger.debug(f"📦 Total template_files before update: {len(template_files)}")
-            
-            # Debug: Log the values being passed
-            logger.info(f"📦 Updating package.json with backend_service='{backend_service}' (type: {type(backend_service).__name__})")
-            logger.info(f"📦 Updating package.json with css_framework='{css_framework}' (type: {type(css_framework).__name__})")
-            
-            # Update package.json with backend and CSS dependencies
-            template_files = self._template_service.update_package_json_dependencies(
-                template_files,
-                backend_service,
-                css_framework
-            )
-            
-            # Debug: Check if package.json exists after update
-            pkg_exists_after = any(f.path == "package.json" for f in template_files)
-            logger.debug(f"📦 package.json in template_files AFTER update: {pkg_exists_after}")
-            logger.info(f"✅ Updated package.json with {backend_service} and {css_framework} dependencies")
-            
-            # Add AI-generated documentation files
-            ai_doc_files = [
-                FileStructure(
-                    path="README.md",
-                    content=readme,
-                    description="Comprehensive project overview with setup instructions"
-                ),
-                FileStructure(
-                    path="ARCHITECTURE.md",
-                    content=architecture,
-                    description="Architecture decisions and design patterns"
-                ),
-                FileStructure(
-                    path=".cursorrules",
-                    content=cursorrules,
-                    description="AI coding guidelines and conventions"
-                ),
-                FileStructure(
-                    path="CONTRIBUTING.md",
-                    content=self._generate_contributing_md(framework, language, backend_service),
-                    description="AI-friendly contribution guidelines"
-                ),
-                FileStructure(
-                    path="KNOWLEDGE_GRAPH.md",
-                    content=f"# Knowledge Graph\n\n{project_structure}\n\n## Module Dependencies\n\nSee ARCHITECTURE.md for detailed relationships.",
-                    description="Dependency map for AI navigation"
-                )
-            ]
-            
-            # Combine all files
-            all_files = template_files + ai_doc_files
-            
-            logger.info(f"📊 Total files: {len(all_files)} ({len(template_files)} template + {len(ai_doc_files)} AI docs)")
-            
-            # Debug: Check if package.json exists
-            package_json_exists = any(f.path == "package.json" for f in all_files)
-            logger.debug(f"📦 package.json exists in all_files: {package_json_exists}")
-            if package_json_exists:
-                pkg_file = next(f for f in all_files if f.path == "package.json")
-                logger.debug(f"📦 package.json content length: {len(pkg_file.content)} chars")
-            
-            # Extract dependencies from updated package.json
-            extracted_deps = self._extract_dependencies_from_package_json(all_files)
-            
-            # Create boilerplate with AI-generated metadata
-            project_name = request.description.lower().replace(" ", "-")[:30]
-            
-            return Boilerplate(
-                project_metadata=ProjectMetadata(
-                    name=project_name,
-                    stack_type=StackType.GOOGLE_MODE if request.google_mode else StackType.AGNOSTIC,
-                    explanation=f"AI-optimized {framework} boilerplate for: {request.description}"
-                ),
-                file_structure=all_files,
-                dependencies=extracted_deps,
-                cursor_rules=CursorRules(
-                    content=cursorrules,
-                    focus_areas=metadata.get("focus_areas", ["type-safety", "performance"])
-                ),
-                known_limitations=metadata.get("known_limitations", []),
-                cost_optimizations=metadata.get("cost_optimizations", [])
-            )
-            
-        except Exception as e:
-            logger.error(f"Error generating boilerplate: {e}")
-            logger.exception("Full traceback:")
-            logger.warning("⚠️  Falling back to mock data")
-            return self._generate_mock_boilerplate(request)
-    
-    def _parse_response(self, data: dict, request: ProjectRequest = None) -> Boilerplate:
-        """Parse AI response into domain entities with safe defaults"""
-        # VibeArchitect branding footer for .md files
-        branding_footer = "\n\n---\n\n<div align=\"center\">\n\n**Generated with ❤️ by [VibeArchitect](https://vibearchitect.dev)**\n\n*AI-First Boilerplate Generator - Optimized for Cursor & Windsurf*\n\n</div>"
-        
-        # Get AI-generated files
-        ai_files = []
-        for file in data.get("file_structure", []):
-            content = file.get("content", "")
-            path = file.get("path", "unknown.txt")
-            
-            # Add branding to .md files
-            if path.endswith('.md'):
-                content = content + branding_footer
-            
-            ai_files.append(FileStructure(
-                path=path,
-                content=content,
-                description=file.get("description", "Generated file")
-            ))
-        
-        
-        # If request is provided, add template files
-        all_files = ai_files
-        if request:
-            framework = request.tech_preferences.framework if hasattr(request.tech_preferences, 'framework') else "nextjs"
-            language = request.tech_preferences.language if hasattr(request.tech_preferences, 'language') else "typescript"
-            backend_service = request.tech_preferences.backend_service if hasattr(request.tech_preferences, 'backend_service') else "none"
-            css_framework = request.tech_preferences.css if hasattr(request.tech_preferences, 'css') else "tailwind"
-            
-            template_name = self._template_service.get_template_name(framework, language, backend_service, css_framework)
-            template_files = self._template_service.load_template_files(template_name)
-            
-            # Add backend files
-            if backend_service != "none":
-                backend_files = self._template_service.get_backend_config_files(backend_service, language)
-                for file in backend_files:
-                    if file.path.startswith('.env'):
-                        template_files.append(file)
-                    else:
-                        filename = file.path.split('/')[-1]
-                        mapped_file = FileStructure(
-                            path=f"src/lib/{filename}",
-                            content=file.content,
-                            description=file.description
-                        )
-                        template_files.append(mapped_file)
-            
-            # Add CSS files
-            if css_framework == "scss":
-                css_files = self._template_service.get_css_config_files(css_framework)
-                template_files.extend(css_files)
-            
-            # Combine template files + AI files (AI files override template files with same path)
-            file_map = {f.path: f for f in template_files}
-            for ai_file in ai_files:
-                file_map[ai_file.path] = ai_file
-            
-            # Add CONTRIBUTING.md generated by backend (always, not from AI)
-            contributing_content = self._generate_contributing_md(framework, language, backend_service)
-            file_map["CONTRIBUTING.md"] = FileStructure(
-                path="CONTRIBUTING.md",
-                content=contributing_content,
-                description="AI-friendly contribution guidelines with best practices and workflows"
-            )
-            
-            all_files = list(file_map.values())
-            logger.info(f"📊 Combined files: {len(template_files)} template + {len(ai_files)} AI + 1 CONTRIBUTING = {len(all_files)} total")
-        
-        return Boilerplate(
-            project_metadata=ProjectMetadata(
-                name=data.get("project_metadata", {}).get("name", "generated-project"),
-                stack_type=StackType(data.get("project_metadata", {}).get("stack_type", "agnostic")),
-                explanation=data.get("project_metadata", {}).get("explanation", "AI-generated boilerplate")
-            ),
-            file_structure=all_files,
-            dependencies=Dependencies(
-                main=data.get("dependencies", {}).get("main", ["next@14", "react@18"]),
-                dev=data.get("dependencies", {}).get("dev", ["typescript@5"])
-            ),
-            cursor_rules=CursorRules(
-                content=data.get("cursor_rules", {}).get("content", "# AI Guidelines\n- TypeScript strict mode"),
-                focus_areas=data.get("cursor_rules", {}).get("focus_areas", ["type-safety"])
-            ),
-            known_limitations=data.get("known_limitations", []),
-            cost_optimizations=data.get("cost_optimizations", [])
-        )
-    
-    def _generate_contributing_md(self, framework: str, language: str, backend_service: str) -> str:
-        """Generate a standard CONTRIBUTING.md file"""
-        branding_footer = "\n\n---\n\n<div align=\"center\">\n\n**Generated with ❤️ by [VibeArchitect](https://vibearchitect.dev)**\n\n*AI-First Boilerplate Generator - Optimized for Cursor & Windsurf*\n\n</div>"
-        
-        return f"""# Contributing to the Project (AI-Friendly Guide)
-
-This document outlines the guidelines and best practices for contributing to this project, specifically tailored to help AI models like Cursor/Windsurf understand the expectations.
-
-## 1. Core Principles for AI Contributions
-
-### **AI-First Mindset**: Prioritize clarity and semantic structure
-- Write code that is easy for AI to understand and extend
-- Use descriptive variable and function names (no abbreviations)
-- Add JSDoc/TSDoc comments for all public functions
-- Keep functions small and focused (single responsibility)
-
-### **Type Safety First**
-- Always use TypeScript strict mode
-- Define interfaces for all data structures
-- Avoid `any` types - use `unknown` or proper types
-- Export types for reusability
-
-### **Feature-Sliced Design**
-- Keep features self-contained in `src/features/[feature-name]/`
-- Don't cross-import between features
-- Use shared components from `src/components/`
-- Keep business logic in hooks, not components
-
-## 2. Development Workflow
-
-### Setting Up Your Environment
-
-```bash
-# Install dependencies
-npm install
-
-# Copy environment variables
-cp .env.example .env.local
-
-# Run development server
-npm run dev
-```
-
-### Before Making Changes
-
-1. **Understand the architecture** - Read `ARCHITECTURE.md`
-2. **Check the knowledge graph** - Review `KNOWLEDGE_GRAPH.md` for dependencies
-3. **Follow the .cursorrules** - AI coding guidelines are in `.cursorrules`
-
-### Making Changes
-
-1. **Create a new branch** (if using Git)
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-
-2. **Write code following patterns**
-   - Use existing components as templates
-   - Follow naming conventions (see below)
-   - Add TODO comments for incomplete features
-
-3. **Test your changes**
-   ```bash
-   npm run build    # Ensure it builds
-   npm run lint     # Check for linting errors
-   ```
-
-## 3. Code Style Guidelines
-
-### Naming Conventions
-
-- **Components**: PascalCase (`UserProfile.tsx`, `ProductCard.tsx`)
-- **Utilities**: camelCase (`formatDate.ts`, `validateEmail.ts`)
-- **Types**: PascalCase with Type/Interface suffix (`UserType`, `ProductInterface`)
-- **Constants**: UPPER_SNAKE_CASE (`API_BASE_URL`, `MAX_RETRIES`)
-- **Hooks**: camelCase with `use` prefix (`useAuth.ts`, `useProducts.ts`)
-
-### File Organization
-
-```
-src/
-├── app/              # Next.js App Router pages
-├── components/       # Reusable UI components
-│   ├── ui/          # Base components (Button, Input, Card)
-│   └── layout/      # Layout components (Header, Footer)
-├── features/        # Feature modules (self-contained)
-├── lib/             # Utilities and services
-├── hooks/           # Shared React hooks
-└── types/           # Shared TypeScript types
-```
-
-### Component Structure
-
-```typescript
-// 1. Imports (grouped: React, external, internal)
-import {{ useState }} from 'react';
-import {{ Button }} from '@/components/ui/button';
-
-// 2. Types/Interfaces
-interface MyComponentProps {{
-  title: string;
-  onAction: () => void;
-}}
-
-// 3. Component
-export function MyComponent({{ title, onAction }}: MyComponentProps) {{
-  // 4. Hooks
-  const [state, setState] = useState(false);
-  
-  // 5. Event handlers
-  const handleClick = () => {{
-    setState(true);
-    onAction();
-  }};
-  
-  // 6. Render
-  return (
-    <div>
-      <h1>{{title}}</h1>
-      <Button onClick={{handleClick}}>Action</Button>
-    </div>
-  );
-}}
-```
-
-## 4. Tech Stack Specific Guidelines
-
-### {framework.capitalize()} Best Practices
-
-{"- Use Server Components by default (no 'use client' unless needed)" if framework == "nextjs" else "- Keep components pure and reusable"}
-{"- Use App Router patterns (layouts, loading, error)" if framework == "nextjs" else "- Follow React best practices"}
-{"- Leverage Next.js Image component for optimization" if framework == "nextjs" else "- Optimize images and assets"}
-
-### {language.capitalize()} Guidelines
-
-{"- Enable strict mode in tsconfig.json" if language == "typescript" else "- Use JSDoc for type hints"}
-{"- Use type inference when possible" if language == "typescript" else "- Add PropTypes for components"}
-{"- Avoid type assertions (use type guards)" if language == "typescript" else "- Validate props at runtime"}
-
-### Styling with Tailwind CSS
-
-- Use Tailwind utility classes (avoid inline styles)
-- Create reusable components for repeated patterns
-- Use `cn()` utility for conditional classes
-- Follow mobile-first responsive design
-
-{f'''### {backend_service.capitalize()} Integration
-
-- All backend calls go through `src/lib/{backend_service}.ts`
-- Use proper error handling for all API calls
-- Implement loading states for async operations
-- Cache data when appropriate
-''' if backend_service != "none" else ""}
-
-## 5. AI Coding Assistance Tips
-
-### For Cursor/Windsurf Users
-
-1. **Use the knowledge graph** - Reference `KNOWLEDGE_GRAPH.md` for module relationships
-2. **Check .cursorrules** - AI guidelines are defined there
-3. **Read component docs** - Each component has JSDoc explaining its purpose
-4. **Follow existing patterns** - Use similar components as templates
-
-### Effective AI Prompts
-
-**Good prompts:**
-- "Create a user profile component following the pattern in UserCard.tsx"
-- "Add error handling to the login function in src/lib/auth.ts"
-- "Implement a loading state for the products list using Suspense"
-
-**Bad prompts:**
-- "Make it work" (too vague)
-- "Fix the bug" (no context)
-- "Add a feature" (no specification)
-
-## 6. Testing Guidelines
-
-### Manual Testing Checklist
-
-- [ ] Component renders without errors
-- [ ] All interactive elements work (buttons, forms, links)
-- [ ] Responsive design works on mobile/tablet/desktop
-- [ ] No console errors or warnings
-- [ ] TypeScript compiles without errors
-
-### Future: Automated Testing
-
-- Unit tests for utilities and hooks
-- Integration tests for features
-- E2E tests for critical user flows
-
-## 7. Performance Best Practices
-
-- **Use Server Components** when possible (Next.js)
-- **Lazy load** heavy components with `React.lazy()`
-- **Optimize images** with next/image or similar
-- **Minimize bundle size** - check with bundle analyzer
-- **Implement caching** for API responses
-
-## 8. Accessibility (A11Y)
-
-- Use semantic HTML (`<button>`, `<nav>`, `<main>`)
-- Add ARIA labels for interactive elements
-- Ensure keyboard navigation works
-- Test with screen readers
-- Maintain color contrast ratios (WCAG AA)
-
-## 9. Security Considerations
-
-- Never commit `.env.local` or secrets
-- Validate all user inputs
-- Sanitize data before rendering
-- Use HTTPS for all API calls
-- Implement CSRF protection for forms
-
-## 10. Documentation
-
-### Code Comments
-
-- Add JSDoc for all exported functions
-- Explain **why**, not **what** (code shows what)
-- Document complex algorithms or business logic
-- Keep comments up-to-date with code changes
-
-### README Updates
-
-- Update README.md if you add new features
-- Document new environment variables
-- Add setup instructions for new dependencies
-
-## 11. Common Pitfalls to Avoid
-
-❌ **Don't:**
-- Use `any` type in TypeScript
-- Create large monolithic components (>200 lines)
-- Hardcode values (use constants or env vars)
-- Ignore TypeScript errors
-- Skip error handling
-
-✅ **Do:**
-- Break down complex components
-- Use proper TypeScript types
-- Handle errors gracefully
-- Follow existing patterns
-- Write self-documenting code
-
-## 12. Getting Help
-
-### Resources
-
-- **Architecture**: See `ARCHITECTURE.md` for design decisions
-- **Dependencies**: Check `KNOWLEDGE_GRAPH.md` for module relationships
-- **AI Guidelines**: Review `.cursorrules` for coding standards
-- **Framework Docs**: [{framework.capitalize()} Documentation](https://{"nextjs.org" if framework == "nextjs" else "react.dev"})
-
-### Questions?
-
-- Check existing code for similar patterns
-- Review the documentation files
-- Ask AI (Cursor/Windsurf) with specific context
-- Refer to official framework documentation
-
-## Summary
-
-This project is optimized for AI-assisted development. Follow these guidelines to maintain code quality and consistency:
-
-1. **Type safety** - Use TypeScript strictly
-2. **Clear structure** - Follow Feature-Sliced Design
-3. **Self-documenting** - Write descriptive code
-4. **AI-friendly** - Use semantic naming and comments
-5. **Performance** - Optimize for speed and bundle size
-
-Happy coding! 🚀{branding_footer}"""
     
     def _generate_mock_boilerplate(self, request: ProjectRequest) -> Boilerplate:
         """Generate mock boilerplate using templates + mock docs"""
@@ -1696,3 +1483,129 @@ import {{ createDocument, getDocument }} from '@/infrastructure/services/{backen
             known_limitations=known_limitations,
             cost_optimizations=cost_optimizations
         )
+    
+    async def _generate_contributing(self, request: ProjectRequest, framework: str, language: str, backend_service: str, architecture: str) -> str:
+        """Generate CONTRIBUTING.md using AI with custom prompt"""
+        project_root = Path(__file__).parent.parent.parent.parent.parent
+        prompt_path = project_root / "prompts" / "generate-contributing.md"
+        
+        if not prompt_path.exists():
+            logger.error(f"CONTRIBUTING prompt not found at {prompt_path}")
+            raise FileNotFoundError(f"Prompt file not found: {prompt_path}")
+        
+        with open(prompt_path, "r") as f:
+            prompt_template = f.read()
+        
+        prompt = prompt_template.replace("{{DESCRIPTION}}", request.description)
+        prompt = prompt.replace("{{FRAMEWORK}}", framework)
+        prompt = prompt.replace("{{LANGUAGE}}", language)
+        prompt = prompt.replace("{{BACKEND_SERVICE}}", backend_service if backend_service != "none" else "None")
+        prompt = prompt.replace("{{CSS_FRAMEWORK}}", request.tech_preferences.css.value if request.tech_preferences.css else "None")
+        prompt = prompt.replace("{{ARCHITECTURE}}", architecture)
+        
+        try:
+            response = self._call_with_retry(
+                prompt,
+                generation_config={
+                    "temperature": 0.4,
+                    "max_output_tokens": 8192,
+                }
+            )
+            return response.text.strip()
+        except Exception as e:
+            logger.error(f"Failed to generate CONTRIBUTING: {e}")
+            return f"# Contributing\n\nThank you for contributing to this project!\n\n---\n\n**Generated with ❤️ by [VibeArchitect](https://vibearchitect.dev)**\n\n*AI-First Boilerplate Generator - Optimized for Cursor & Windsurf*"
+    
+    async def _generate_knowledge_graph(self, request: ProjectRequest, framework: str, language: str, backend_service: str, architecture: str, size: str, tree: list) -> str:
+        """Generate KNOWLEDGE_GRAPH.md using AI with custom prompt"""
+        project_root = Path(__file__).parent.parent.parent.parent.parent
+        prompt_path = project_root / "prompts" / "generate-knowledge-graph.md"
+        
+        if not prompt_path.exists():
+            logger.error(f"KNOWLEDGE_GRAPH prompt not found at {prompt_path}")
+            raise FileNotFoundError(f"Prompt file not found: {prompt_path}")
+        
+        with open(prompt_path, "r") as f:
+            prompt_template = f.read()
+        
+        tree_str = "\n".join(tree[:50])
+        if len(tree) > 50:
+            tree_str += f"\n... and {len(tree) - 50} more files"
+        
+        prompt = prompt_template.replace("{{DESCRIPTION}}", request.description)
+        prompt = prompt.replace("{{FRAMEWORK}}", framework)
+        prompt = prompt.replace("{{LANGUAGE}}", language)
+        prompt = prompt.replace("{{BACKEND_SERVICE}}", backend_service if backend_service != "none" else "None")
+        prompt = prompt.replace("{{CSS_FRAMEWORK}}", request.tech_preferences.css.value if request.tech_preferences.css else "None")
+        prompt = prompt.replace("{{ARCHITECTURE}}", architecture)
+        prompt = prompt.replace("{{SIZE}}", size.upper())
+        prompt = prompt.replace("{{TREE}}", tree_str)
+        
+        try:
+            response = self._call_with_retry(
+                prompt,
+                generation_config={
+                    "temperature": 0.3,
+                    "max_output_tokens": 8192,
+                }
+            )
+            return response.text.strip()
+        except Exception as e:
+            logger.error(f"Failed to generate KNOWLEDGE_GRAPH: {e}")
+            return f"# Knowledge Graph\n\n{tree_str}\n\n---\n\n**Generated with ❤️ by [VibeArchitect](https://vibearchitect.dev)**\n\n*AI-First Boilerplate Generator - Optimized for Cursor & Windsurf*"
+    
+    async def _generate_metadata(self, request: ProjectRequest, framework: str, language: str, backend_service: str, architecture: str) -> dict:
+        """Generate AI metadata (focus_areas, known_limitations, cost_optimizations) using custom prompt"""
+        project_root = Path(__file__).parent.parent.parent.parent.parent
+        prompt_path = project_root / "prompts" / "generate-metadata.md"
+        
+        if not prompt_path.exists():
+            logger.error(f"Metadata prompt not found at {prompt_path}")
+            raise FileNotFoundError(f"Prompt file not found: {prompt_path}")
+        
+        with open(prompt_path, "r") as f:
+            prompt_template = f.read()
+        
+        # Format prompt with project details
+        prompt = prompt_template.replace("{{DESCRIPTION}}", request.description)
+        prompt = prompt.replace("{{FRAMEWORK}}", framework)
+        prompt = prompt.replace("{{LANGUAGE}}", language)
+        prompt = prompt.replace("{{BACKEND_SERVICE}}", backend_service if backend_service != "none" else "None")
+        prompt = prompt.replace("{{CSS_FRAMEWORK}}", request.tech_preferences.css.value if request.tech_preferences.css else "None")
+        prompt = prompt.replace("{{ARCHITECTURE}}", architecture)
+
+        try:
+            response = self._call_with_retry(
+                prompt,
+                generation_config={
+                    "temperature": 0.4,
+                    "max_output_tokens": 2048,
+                }
+            )
+            
+            response_text = response.text.strip()
+            # Clean markdown wrapper if present
+            if response_text.startswith("```json"):
+                response_text = response_text.replace("```json", "").replace("```", "").strip()
+            elif response_text.startswith("```"):
+                response_text = response_text.replace("```", "").strip()
+            
+            metadata = json.loads(response_text)
+            logger.info(f"✅ Metadata generated: {len(metadata.get('focus_areas', []))} focus areas, {len(metadata.get('known_limitations', []))} limitations, {len(metadata.get('cost_optimizations', []))} optimizations")
+            return metadata
+        except Exception as e:
+            logger.error(f"Failed to generate metadata: {e}")
+            return {
+                "focus_areas": ["type-safety", "performance", "accessibility", "ai-comprehension"],
+                "known_limitations": [
+                    f"{backend_service.capitalize()} configuration required" if backend_service != "none" else "Backend service not configured",
+                    "Environment variables need to be set",
+                    "Authentication not implemented"
+                ],
+                "cost_optimizations": [
+                    f"Use {backend_service} free tier for development" if backend_service != "none" else "Optimize for serverless deployment",
+                    "Implement caching strategies",
+                    "Optimize images with Next.js Image component",
+                    "Enable code splitting and lazy loading"
+                ]
+            }

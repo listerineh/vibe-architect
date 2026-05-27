@@ -1,3 +1,5 @@
 export { StreamingPreview } from './streaming-preview'
 export { PreviewPanel } from './preview-panel'
 export { ProjectSummary } from './project-summary'
+export { ArchitectureSelector } from './architecture-selector'
+export { GenerationProgress } from './generation-progress'

@@ -101,3 +101,33 @@ class ProgressiveGenerationDTO(BaseModel):
     google_mode: bool = True
     tech_preferences: TechPreferencesDTO = TechPreferencesDTO()
     step: Literal["file_structure", "dependencies", "focus_areas", "limitations", "cost_optimizations"]
+
+
+class ProjectAnalysisResponseDTO(BaseModel):
+    """Response from project complexity analysis"""
+    size: Literal["small", "medium", "large"]
+    reasoning: str
+    tree: List[str]
+    estimated_files: int
+    complexity_score: int = Field(ge=1, le=10)
+    required_base_files: List[str]
+
+
+class ArchitectureProposalDTO(BaseModel):
+    """Single architecture proposal"""
+    name: str
+    reasoning: str
+    complexity: Literal["low", "medium", "high"]
+    pros: List[str]
+    cons: List[str]
+    estimated_files: int
+    example_structure: List[str]
+
+
+class ArchitectureAnalysisResponseDTO(BaseModel):
+    """Response with architecture proposals"""
+    project_size: Literal["small", "medium", "large"]
+    complexity_score: int = Field(ge=1, le=10)
+    reasoning: str
+    proposed_architectures: List[ArchitectureProposalDTO]
+    recommended: str

@@ -1,0 +1,11 @@
+interface {{COMPONENT_NAME}}Props {
+  // Add your props here
+}
+
+export function {{COMPONENT_NAME}}({ }: {{COMPONENT_NAME}}Props) {
+  return (
+    <div>
+      {/* Component content */}
+    </div>
+  );
+}

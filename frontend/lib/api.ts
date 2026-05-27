@@ -45,6 +45,33 @@ export interface BoilerplateResponse {
   cost_optimizations?: string[];
 }
 
+export interface ProjectAnalysis {
+  size: 'small' | 'medium' | 'large';
+  reasoning: string;
+  tree: string[];
+  estimated_files: number;
+  complexity_score: number;
+  required_base_files: string[];
+}
+
+export interface ArchitectureProposal {
+  name: string;
+  reasoning: string;
+  complexity: 'low' | 'medium' | 'high';
+  pros: string[];
+  cons: string[];
+  estimated_files: number;
+  example_structure: string[];
+}
+
+export interface ArchitectureAnalysis {
+  project_size: 'small' | 'medium' | 'large';
+  complexity_score: number;
+  reasoning: string;
+  proposed_architectures: ArchitectureProposal[];
+  recommended: string;
+}
+
 export async function previewBoilerplate(request: ProjectRequest): Promise<BoilerplateResponse> {
   const response = await fetch(`${API_BASE_URL}/api/preview`, {
     method: 'POST',
@@ -103,6 +130,40 @@ export async function refineDescription(request: ProjectRequest): Promise<{
   if (!response.ok) {
     const error = await response.json();
     throw new Error(error.detail || 'Failed to refine description');
+  }
+
+  return response.json();
+}
+
+export async function analyzeProject(request: ProjectRequest): Promise<ProjectAnalysis> {
+  const response = await fetch(`${API_BASE_URL}/api/analyze-project`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to analyze project');
+  }
+
+  return response.json();
+}
+
+export async function proposeArchitectures(request: ProjectRequest): Promise<ArchitectureAnalysis> {
+  const response = await fetch(`${API_BASE_URL}/api/propose-architectures`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to propose architectures');
   }
 
   return response.json();
