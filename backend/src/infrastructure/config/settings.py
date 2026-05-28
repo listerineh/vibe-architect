@@ -22,6 +22,15 @@ class Settings(BaseSettings):
     system_prompt_path: str = "../prompts/system-prompt.md"
     log_level: str = Field(default="INFO", env="LOG_LEVEL")  # DEBUG, INFO, WARNING, ERROR
     
+    # Firebase Admin SDK
+    firebase_service_account_key: Optional[str] = Field(default=None, env="FIREBASE_SERVICE_ACCOUNT_KEY")
+    
+    # Firebase Storage
+    firebase_storage_bucket: str = Field(
+        default="vibe-architect-676ae.firebasestorage.app",
+        env="FIREBASE_STORAGE_BUCKET"
+    )
+    
     @field_validator('cors_origins', mode='before')
     @classmethod
     def parse_cors_origins(cls, v):

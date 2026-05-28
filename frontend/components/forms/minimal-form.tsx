@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Download, Sparkles, Check, Zap } from 'lucide-react';
 import { TechPreferences, refineDescription } from '@/lib/api';
+import { useError } from '@/components/providers';
 import { 
   NextJsIcon, 
   ReactIcon, 
@@ -30,6 +31,7 @@ interface MinimalFormProps {
 }
 
 export function MinimalForm({ onPreview, onGenerate, isLoading, hasProcessed }: MinimalFormProps) {
+  const { showError } = useError();
   const [description, setDescription] = useState('');
   const [backend, setBackend] = useState<'firebase' | 'supabase' | 'none'>('supabase');
   const [framework, setFramework] = useState<'nextjs' | 'react' | 'astro'>('nextjs');
@@ -57,7 +59,7 @@ export function MinimalForm({ onPreview, onGenerate, isLoading, hasProcessed }: 
       setDescription(result.refined || '');
     } catch (error) {
       console.error('Refine error:', error);
-      alert('Failed to refine description. Please try again.');
+      showError('Failed to refine description. Please try again.');
     } finally {
       setIsRefining(false);
     }

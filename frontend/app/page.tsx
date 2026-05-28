@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion';
 import { Zap, FileCode, Sparkles, ArrowRight, Check, Code2, Rocket } from 'lucide-react';
 import Link from 'next/link';
+import { Header } from '@/components/layout';
 
 export default function LandingPage() {
   const features = [
@@ -22,100 +23,14 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 relative overflow-hidden">
+      <Header />
+      
       {/* Background gradient */}
       <div className="absolute inset-0 bg-gradient-to-br from-indigo-950/20 via-zinc-950 to-purple-950/20 pointer-events-none" />
       <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-purple-600/10 rounded-full blur-[120px] pointer-events-none" />
       
       <div id="main-content" className="relative max-w-6xl mx-auto px-6 py-16 md:py-24">
-        {/* Header */}
-        <motion.header
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-20 md:mb-32 relative"
-        >
-          {/* Animated background glow */}
-          <motion.div
-            className="absolute -inset-4 bg-gradient-to-r from-indigo-500/20 via-purple-500/20 to-pink-500/20 rounded-2xl blur-2xl"
-            animate={{
-              opacity: [0.3, 0.5, 0.3],
-              scale: [0.95, 1.05, 0.95],
-            }}
-            transition={{
-              duration: 4,
-              repeat: Infinity,
-              ease: "easeInOut"
-            }}
-          />
-          
-          <div className="relative">
-            <div className="flex items-center gap-3 mb-4">
-              {/* Animated dots */}
-              <div className="flex gap-1.5">
-                <motion.div 
-                  className="w-2 h-2 bg-indigo-500 rounded-full"
-                  animate={{
-                    scale: [1, 1.2, 1],
-                    opacity: [1, 0.5, 1],
-                  }}
-                  transition={{
-                    duration: 2,
-                    repeat: Infinity,
-                    ease: "easeInOut"
-                  }}
-                />
-                <motion.div 
-                  className="w-2 h-2 bg-purple-500 rounded-full"
-                  animate={{
-                    scale: [1, 1.2, 1],
-                    opacity: [1, 0.5, 1],
-                  }}
-                  transition={{
-                    duration: 2,
-                    repeat: Infinity,
-                    ease: "easeInOut",
-                    delay: 0.2
-                  }}
-                />
-                <motion.div 
-                  className="w-2 h-2 bg-pink-500 rounded-full"
-                  animate={{
-                    scale: [1, 1.2, 1],
-                    opacity: [1, 0.5, 1],
-                  }}
-                  transition={{
-                    duration: 2,
-                    repeat: Infinity,
-                    ease: "easeInOut",
-                    delay: 0.4
-                  }}
-                />
-              </div>
-              
-              <motion.h1 
-                className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-zinc-100 via-zinc-200 to-zinc-100 bg-clip-text text-transparent"
-                animate={{
-                  backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
-                }}
-                transition={{
-                  duration: 5,
-                  repeat: Infinity,
-                  ease: "linear"
-                }}
-                style={{
-                  backgroundSize: "200% 200%",
-                }}
-              >
-                VibeArchitect
-              </motion.h1>
-            </div>
-            
-            <p className="text-zinc-400 text-base md:text-lg font-light tracking-wider">
-              <span className="text-indigo-400 font-medium">AI-First</span> Boilerplate Generator
-            </p>
-          </div>
-        </motion.header>
-
         {/* Hero Section */}
         <motion.section
           initial={{ opacity: 0 }}

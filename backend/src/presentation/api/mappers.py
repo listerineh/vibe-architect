@@ -25,6 +25,8 @@ class DTOMapper:
         return ProjectRequest(
             description=dto.description,
             tech_preferences=TechPreferences(
+                framework=dto.tech_preferences.framework,
+                language=dto.tech_preferences.language,
                 css=CSSFramework(dto.tech_preferences.css),
                 database=dto.tech_preferences.database,
                 backend_service=dto.tech_preferences.backend_service

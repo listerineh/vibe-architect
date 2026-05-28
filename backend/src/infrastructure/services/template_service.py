@@ -337,28 +337,28 @@ $breakpoint-xl: 1280px;
                     # Load and merge backend dependencies
                     if backend_service != "none":
                         dep_file = dependencies_dir / f"{backend_service}.json"
-                        logger.info(f"📦 Looking for dependencies file: {dep_file}")
+                        logger.debug(f"📦 Looking for dependencies file: {dep_file}")
                         if dep_file.exists():
                             with open(dep_file, 'r') as f:
                                 backend_deps = json.load(f)
-                                logger.info(f"📦 Loaded {backend_service} dependencies: {backend_deps}")
+                                logger.debug(f"📦 Loaded {backend_service} dependencies: {backend_deps}")
                                 package_data["dependencies"].update(backend_deps.get("dependencies", {}))
                                 package_data["devDependencies"].update(backend_deps.get("devDependencies", {}))
-                                logger.info(f"📦 Updated package.json with {len(backend_deps.get('dependencies', {}))} main + {len(backend_deps.get('devDependencies', {}))} dev deps")
+                                logger.info(f"📦 Added {backend_service} dependencies: {len(backend_deps.get('dependencies', {}))} main + {len(backend_deps.get('devDependencies', {}))} dev")
                         else:
                             logger.warning(f"⚠️  Dependencies file not found: {dep_file}")
                     
                     # Load and merge CSS dependencies
                     if css_framework in ["scss", "tailwind"]:
                         dep_file = dependencies_dir / f"{css_framework}.json"
-                        logger.info(f"📦 Looking for CSS dependencies file: {dep_file}")
+                        logger.debug(f"📦 Looking for CSS dependencies file: {dep_file}")
                         if dep_file.exists():
                             with open(dep_file, 'r') as f:
                                 css_deps = json.load(f)
-                                logger.info(f"📦 Loaded {css_framework} dependencies: {css_deps}")
+                                logger.debug(f"📦 Loaded {css_framework} dependencies: {css_deps}")
                                 package_data["dependencies"].update(css_deps.get("dependencies", {}))
                                 package_data["devDependencies"].update(css_deps.get("devDependencies", {}))
-                                logger.info(f"📦 Updated package.json with {len(css_deps.get('dependencies', {}))} main + {len(css_deps.get('devDependencies', {}))} dev CSS deps")
+                                logger.info(f"📦 Added {css_framework} dependencies: {len(css_deps.get('dependencies', {}))} main + {len(css_deps.get('devDependencies', {}))} dev")
                         else:
                             logger.warning(f"⚠️  CSS dependencies file not found: {dep_file}")
                     

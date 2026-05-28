@@ -6,12 +6,14 @@ import { ArchitectureSelector, GenerationProgress } from '@/components/preview';
 import { useStreamingGeneration } from '@/hooks/use-streaming-generation';
 import { TechPreferences, downloadZip } from '@/lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Download, Sparkles, AlertTriangle } from 'lucide-react';
-import Link from 'next/link';
+import { Download, Sparkles, AlertTriangle, Save } from 'lucide-react';
 import { useError } from '@/components/providers';
+import { ConfirmDialog } from '@/components/ui/dialog';
+import { Header } from '@/components/layout';
 
 export default function GeneratorPage() {
   const { showError } = useError();
+  
   const [description, setDescription] = useState('');
   const [techPreferences, setTechPreferences] = useState<TechPreferences>({
     framework: 'nextjs',
@@ -21,6 +23,7 @@ export default function GeneratorPage() {
   });
   const [selectedArchitecture, setSelectedArchitecture] = useState<string | undefined>();
   const [showForm, setShowForm] = useState(true);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
 
   const {
     progress,
@@ -32,6 +35,9 @@ export default function GeneratorPage() {
     startGeneration,
     cancelGeneration
   } = useStreamingGeneration();
+
+  // Derive isSaved directly from metadata (no state needed)
+  const isSaved = status === 'success' && metadata && (metadata as any).auto_saved === true;
 
   const handleGenerate = async (desc: string, prefs: TechPreferences) => {
     if (!desc.trim()) {
@@ -63,8 +69,16 @@ export default function GeneratorPage() {
 
   const handleArchitectureSelect = (architecture: string) => {
     setSelectedArchitecture(architecture);
-    // Note: En una implementación real, aquí enviarías la arquitectura seleccionada al backend
-    // Por ahora, el backend usa la recomendada automáticamente
+  };
+
+  const handleApplyArchitecture = () => {
+    if (!selectedArchitecture || !description || !techPreferences) return;
+    
+    startGeneration({
+      description,
+      tech_preferences: techPreferences,
+      architecture: selectedArchitecture
+    });
   };
 
   const handleDownload = async () => {
@@ -89,7 +103,12 @@ export default function GeneratorPage() {
     }
   };
 
-  const handleReset = () => {
+
+  const handleCancelClick = () => {
+    setShowCancelDialog(true);
+  };
+
+  const handleCancelConfirm = () => {
     cancelGeneration();
     setShowForm(true);
     setDescription('');
@@ -98,28 +117,15 @@ export default function GeneratorPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 w-full relative overflow-hidden">
+      <Header />
+      
       {/* Background gradient */}
       <div className="absolute inset-0 bg-gradient-to-br from-indigo-950/20 via-zinc-950 to-purple-950/20 pointer-events-none" />
       <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-purple-600/10 rounded-full blur-[120px] pointer-events-none" />
       
       <div id="main-content" className="relative w-full px-6 md:px-8 lg:px-16 xl:px-20 py-12 md:py-16">
-        {/* Back button */}
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="mb-10 md:mb-12"
-        >
-          <Link 
-            href="/"
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900/50 rounded-lg transition-all"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to home
-          </Link>
-        </motion.div>
-
-        {/* Header */}
+        {/* Page Header */}
         <motion.header
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -149,7 +155,7 @@ export default function GeneratorPage() {
                 <div className="flex items-center gap-2 mb-2">
                   <h3 className="text-sm font-semibold text-zinc-100">Alpha Demo</h3>
                   <span className="px-2 py-0.5 text-xs font-medium bg-indigo-500/20 text-indigo-300 rounded-full border border-indigo-500/30">
-                    v0.1.0-alpha
+                    v0.2.1-alpha
                   </span>
                 </div>
                 <p className="text-sm text-zinc-400 leading-relaxed">
@@ -182,8 +188,8 @@ export default function GeneratorPage() {
               </motion.div>
             )}
 
-            {/* Step 2: Generation in Progress */}
-            {!showForm && status !== 'idle' && (
+            {/* Step 2: Generation in Progress OR Waiting for Architecture */}
+            {!showForm && (architectures || status !== 'idle') && (
               <motion.div
                 key="generation"
                 initial={{ opacity: 0, x: -20 }}
@@ -192,29 +198,67 @@ export default function GeneratorPage() {
                 transition={{ duration: 0.3 }}
                 className="space-y-6"
               >
-                {/* Progress Bar */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                >
-                  <GenerationProgress
-                    progress={progress}
-                    message={message}
-                    status={status}
-                    currentStep={
-                      progress < 20 ? 'Analyzing project complexity...' :
-                      progress < 40 ? 'Proposing architectures...' :
-                      progress < 60 ? 'Matching templates...' :
-                      progress < 75 ? 'Generating files...' :
-                      progress < 90 ? 'Creating documentation...' :
-                      progress < 100 ? 'Finalizing project...' :
-                      'Complete!'
-                    }
-                  />
-                </motion.div>
+                {/* Analysis Phase - Show analyzing state before architecture selection */}
+                {status === 'loading' && !selectedArchitecture && !architectures && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-8 bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-pink-500/10 border border-indigo-500/20 rounded-xl backdrop-blur-sm"
+                  >
+                    <div className="flex items-center gap-4 mb-4">
+                      <div className="relative">
+                        <div className="w-12 h-12 rounded-full bg-indigo-500/20 flex items-center justify-center">
+                          <Sparkles className="w-6 h-6 text-indigo-400 animate-pulse" />
+                        </div>
+                        <div className="absolute inset-0 rounded-full bg-indigo-500/20 animate-ping" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-white">Analyzing Your Project</h3>
+                        <p className="text-sm text-zinc-400">AI is studying your requirements...</p>
+                      </div>
+                    </div>
+                    <div className="space-y-2 text-sm text-zinc-300">
+                      <div className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
+                        <span>Analyzing project complexity</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" style={{ animationDelay: '0.2s' }} />
+                        <span>Evaluating technical requirements</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-pink-400 animate-pulse" style={{ animationDelay: '0.4s' }} />
+                        <span>Proposing optimal architectures</span>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
 
-                {/* Architecture Selection */}
-                {architectures && !selectedArchitecture && status === 'loading' && (
+                {/* Progress Bar - Only show during actual generation (after architecture selected) */}
+                {status === 'loading' && selectedArchitecture && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                  >
+                    <GenerationProgress
+                      progress={progress}
+                      message={message}
+                      status={status}
+                      currentStep={
+                        progress < 20 ? 'Analyzing project complexity...' :
+                        progress < 40 ? 'Proposing architectures...' :
+                        progress < 60 ? 'Matching templates...' :
+                        progress < 75 ? 'Generating files...' :
+                        progress < 90 ? 'Creating documentation...' :
+                        progress < 100 ? 'Finalizing project...' :
+                        'Complete!'
+                      }
+                    />
+                  </motion.div>
+                )}
+
+                {/* Architecture Selection - Show only when waiting for user choice */}
+                {architectures && status === 'idle' && (
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -225,6 +269,7 @@ export default function GeneratorPage() {
                       recommended={architectures.recommended}
                       onSelect={handleArchitectureSelect}
                       selectedArchitecture={selectedArchitecture}
+                      onApply={handleApplyArchitecture}
                     />
                   </motion.div>
                 )}
@@ -538,16 +583,24 @@ export default function GeneratorPage() {
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="flex gap-4 justify-center pt-4">
+                    <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
                       <button
                         onClick={handleDownload}
-                        className="group px-8 py-4 bg-gradient-to-r from-indigo-500 to-purple-500 text-zinc-100 rounded-xl font-semibold hover:shadow-lg hover:shadow-indigo-500/50 transition-all flex items-center gap-2"
+                        className="group px-8 py-4 bg-gradient-to-r from-indigo-500 to-purple-500 text-zinc-100 rounded-xl font-semibold hover:shadow-lg hover:shadow-indigo-500/50 transition-all flex items-center justify-center gap-2"
                       >
                         <Download className="w-5 h-5 group-hover:animate-bounce" />
                         Download Boilerplate
                       </button>
+                      
+                      {isSaved && (
+                        <div className="px-8 py-4 bg-green-500/20 border border-green-500 text-green-400 rounded-xl font-semibold flex items-center justify-center gap-2">
+                          <Save className="w-5 h-5" />
+                          ✅ Saved to your projects!
+                        </div>
+                      )}
+                      
                       <button
-                        onClick={handleReset}
+                        onClick={handleCancelConfirm}
                         className="px-8 py-4 bg-zinc-800/50 border border-zinc-700 text-zinc-100 rounded-xl font-semibold hover:bg-zinc-800 transition-all"
                       >
                         Generate Another
@@ -573,7 +626,7 @@ export default function GeneratorPage() {
                       {message}
                     </p>
                     <button
-                      onClick={handleReset}
+                      onClick={handleCancelConfirm}
                       className="px-8 py-4 bg-zinc-800/50 text-zinc-100 rounded-xl font-semibold hover:bg-zinc-800 transition-all"
                     >
                       Try Again
@@ -585,7 +638,7 @@ export default function GeneratorPage() {
                 {status === 'loading' && (
                   <div className="text-center mt-6">
                     <button
-                      onClick={handleReset}
+                      onClick={handleCancelClick}
                       className="group relative inline-flex items-center gap-2 px-6 py-3 bg-zinc-900/50 hover:bg-red-950/30 border border-zinc-800 hover:border-red-900/50 rounded-lg transition-all duration-300 overflow-hidden"
                     >
                       <div className="absolute inset-0 bg-gradient-to-r from-red-500/0 via-red-500/5 to-red-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
@@ -608,6 +661,19 @@ export default function GeneratorPage() {
           </AnimatePresence>
         </div>
       </div>
+
+      {/* Cancel Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showCancelDialog}
+        onClose={() => setShowCancelDialog(false)}
+        onConfirm={handleCancelConfirm}
+        title="Cancel Generation"
+        description="Are you sure you want to cancel the generation? All progress will be lost."
+        confirmText="Cancel Generation"
+        cancelText="Continue"
+        confirmVariant="danger"
+        type="warning"
+      />
     </div>
   );
 }

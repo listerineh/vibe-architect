@@ -11,6 +11,7 @@ export interface TechPreferences {
 export interface ProjectRequest {
   description: string;
   tech_preferences: TechPreferences;
+  architecture?: string;
 }
 
 export interface ProjectMetadata {

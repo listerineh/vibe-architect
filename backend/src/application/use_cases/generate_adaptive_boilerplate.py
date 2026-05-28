@@ -1,5 +1,7 @@
+import re
 from pathlib import Path
 from typing import List
+from datetime import datetime
 from loguru import logger
 
 from src.domain.entities.project import ProjectRequest, Boilerplate, FileStructure, ProjectMetadata, Dependencies, CursorRules, StackType
@@ -101,7 +103,14 @@ class GenerateAdaptiveBoilerplateUseCase:
         dependencies = self._extract_dependencies(all_files)
         
         # Step 8: Create boilerplate with AI-generated metadata
-        project_name = request.description.lower().replace(" ", "-")[:30]
+        # Generate clean project name: slug + timestamp for uniqueness
+        # Create slug from description (remove special chars, limit length)
+        slug = re.sub(r'[^a-z0-9]+', '-', request.description.lower())
+        slug = re.sub(r'-+', '-', slug).strip('-')[:40]  # Clean up multiple dashes
+        
+        # Add timestamp for uniqueness
+        timestamp = datetime.utcnow().strftime('%Y%m%d-%H%M%S')
+        project_name = f"{slug}-{timestamp}"
         
         # Get metadata from documentation generation
         metadata = getattr(self, '_last_metadata', {
@@ -140,8 +149,12 @@ class GenerateAdaptiveBoilerplateUseCase:
         """Load and customize template files"""
         files = []
         
+        # Create clean slug for project context
+        slug = re.sub(r'[^a-z0-9]+', '-', request.description.lower())
+        slug = re.sub(r'-+', '-', slug).strip('-')[:40]
+        
         project_context = {
-            "name": request.description.lower().replace(" ", "-")[:30],
+            "name": slug,
             "description": request.description
         }
         

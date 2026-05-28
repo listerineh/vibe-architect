@@ -26,8 +26,7 @@ class TechPreferencesDTO(BaseModel):
 class ProjectRequestDTO(BaseModel):
     description: str = Field(..., min_length=10, max_length=500)
     tech_preferences: TechPreferencesDTO = TechPreferencesDTO()
-    framework: str = "nextjs"  # nextjs, react, astro
-    language: str = "typescript"  # typescript, javascript
+    architecture: Optional[str] = None  # User-selected architecture (e.g., "MVC", "Flat/Simple")
 
 
 class FileStructureDTO(BaseModel):

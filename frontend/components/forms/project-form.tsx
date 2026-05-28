@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Sparkles, Download, Eye, Wand2 } from 'lucide-react';
 import { GoogleModeToggle } from './google-mode-toggle';
 import { TechPreferences, refineDescription } from '@/lib/api';
+import { useError } from '@/components/providers';
 
 interface ProjectFormProps {
   onPreview: (description: string, googleMode: boolean, techPrefs: TechPreferences) => void;
@@ -12,6 +13,7 @@ interface ProjectFormProps {
 }
 
 export function ProjectForm({ onPreview, onGenerate, isLoading }: ProjectFormProps) {
+  const { showError } = useError();
   const [description, setDescription] = useState('');
   const [googleMode, setGoogleMode] = useState(true);
   const [framework, setFramework] = useState<'nextjs' | 'react' | 'astro'>('nextjs');
@@ -45,7 +47,7 @@ export function ProjectForm({ onPreview, onGenerate, isLoading }: ProjectFormPro
       setTimeout(() => setShowRefined(false), 3000); // Hide message after 3s
     } catch (error) {
       console.error('Refine error:', error);
-      alert('Failed to refine description. Please try again.');
+      showError('Failed to refine description. Please try again.');
     } finally {
       setIsRefining(false);
     }

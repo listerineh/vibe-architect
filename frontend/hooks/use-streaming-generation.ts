@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { ArchitectureAnalysis, ProjectRequest } from '@/lib/api';
+import { useAuth } from '@/contexts/auth-context';
 
 interface StreamEvent {
   event: string;
@@ -28,6 +29,7 @@ interface UseStreamingGenerationReturn {
 }
 
 export function useStreamingGeneration(): UseStreamingGenerationReturn {
+  const { user } = useAuth();
   const [progress, setProgress] = useState(0);
   const [message, setMessage] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
@@ -66,13 +68,30 @@ export function useStreamingGeneration(): UseStreamingGenerationReturn {
     
     const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
     
-    fetch(`${API_BASE_URL}/api/generate-streaming`, {
-      method: 'POST',
-      headers: {
+    // Get auth token if user is logged in
+    const getHeaders = async () => {
+      const headers: Record<string, string> = {
         'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(request),
-    })
+      };
+      
+      if (user) {
+        try {
+          const token = await user.getIdToken();
+          headers['Authorization'] = `Bearer ${token}`;
+        } catch (error) {
+          console.error('Failed to get auth token:', error);
+        }
+      }
+      
+      return headers;
+    };
+    
+    getHeaders().then(headers => {
+      fetch(`${API_BASE_URL}/api/generate-streaming`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(request),
+      })
       .then(response => {
         if (!response.ok) {
           throw new Error('Failed to start generation');
@@ -113,6 +132,14 @@ export function useStreamingGeneration(): UseStreamingGenerationReturn {
                       case 'architectures_proposed':
                         if (event.data) {
                           setArchitectures(event.data as unknown as ArchitectureAnalysis);
+                        }
+                        break;
+                      
+                      case 'progress':
+                        // Check if backend is waiting for architecture selection
+                        if (event.data && typeof event.data === 'object' && 'waiting' in event.data && event.data.waiting) {
+                          setStatus('idle'); // Set to idle so UI shows architecture selector
+                          setMessage('Select an architecture to continue');
                         }
                         break;
                       
@@ -161,7 +188,8 @@ export function useStreamingGeneration(): UseStreamingGenerationReturn {
         setStatus('error');
         setMessage(error.message || 'Error generating boilerplate');
       });
-  }, []);
+    });
+  }, [user]);
 
   return {
     progress,

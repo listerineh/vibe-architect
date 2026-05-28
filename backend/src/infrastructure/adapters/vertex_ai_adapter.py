@@ -1,5 +1,6 @@
 import os
 import json
+import asyncio
 from typing import List, Dict
 from pathlib import Path
 import google.generativeai as genai
@@ -20,9 +21,30 @@ from src.infrastructure.services.template_service import TemplateService
 from src.infrastructure.config.settings import settings
 
 class VertexAIAdapter(AIServicePort):
-    """Adapter for Vertex AI (Gemini) integration"""
+    """Adapter for Vertex AI (Gemini) integration - Singleton pattern"""
+    
+    _instance = None
+    _lock = None
+    
+    def __new__(cls):
+        """Singleton pattern to reuse the same instance"""
+        if cls._instance is None:
+            if cls._lock is None:
+                import threading
+                cls._lock = threading.Lock()
+            
+            with cls._lock:
+                # Double-check locking pattern
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    cls._instance._singleton_initialized = False
+        return cls._instance
     
     def __init__(self):
+        # Skip initialization if already done (Singleton pattern)
+        if self._singleton_initialized:
+            return
+        
         self._settings = settings  # Store settings reference
         self._initialized = False
         self._api_key = "vertex-ai"  # Mark as using Vertex AI
@@ -35,6 +57,7 @@ class VertexAIAdapter(AIServicePort):
         if not settings.gcp_project_id:
             logger.warning("⚠️  No GCP_PROJECT_ID configured - running in MOCK MODE")
             logger.info("   Configure .env to use real Vertex AI")
+            self._singleton_initialized = True
             return
         
         try:
@@ -55,6 +78,7 @@ class VertexAIAdapter(AIServicePort):
                 else:
                     logger.warning(f"⚠️  Credentials file not found: {credentials_path}")
                     logger.info("   Running in MOCK MODE")
+                    self._singleton_initialized = True
                     return
             
             vertexai.init(
@@ -73,6 +97,9 @@ class VertexAIAdapter(AIServicePort):
         except Exception as e:
             logger.error(f"⚠️  Vertex AI initialization failed: {e}")
             logger.warning("   Running in MOCK MODE for development")
+        finally:
+            # Mark as initialized regardless of success/failure
+            self._singleton_initialized = True
     
     def _call_with_retry(self, prompt: str, generation_config: dict, max_retries: int = 2):
         """Call Gemini API with automatic retry on rate limit"""
@@ -144,17 +171,17 @@ class VertexAIAdapter(AIServicePort):
             "max_output_tokens": 4096,
         }
         
-        # Log the prompt being sent
+        # Log the prompt being sent (DEBUG only)
         logger.debug("=" * 80)
         logger.debug("PROMPT SENT TO AI (analyze_project_complexity):")
-        logger.debug(prompt[:1000] + "..." if len(prompt) > 1000 else prompt)
+        logger.debug(prompt)
         logger.debug("=" * 80)
         
         try:
             response = self._call_with_retry(prompt, generation_config)
             raw_response = response.text.strip()
             
-            # Log the raw response
+            # Log the raw response (DEBUG only)
             logger.debug("=" * 80)
             logger.debug("RAW AI RESPONSE (analyze_project_complexity):")
             logger.debug(raw_response)
@@ -177,12 +204,16 @@ class VertexAIAdapter(AIServicePort):
                 analysis_data = json.loads(repaired)
             
             # Validate and create ProjectAnalysis
+            # Use defaults for missing fields (in case JSON was truncated)
+            tree = analysis_data.get("tree", [])
+            estimated_files = analysis_data.get("estimated_files", len(tree) if tree else 10)
+            
             analysis = ProjectAnalysis(
                 size=ProjectSize(analysis_data["size"].lower()),
-                reasoning=analysis_data["reasoning"],
-                tree=analysis_data["tree"],
-                estimated_files=analysis_data["estimated_files"],
-                complexity_score=analysis_data["complexity_score"],
+                reasoning=analysis_data.get("reasoning", "Analysis based on project description"),
+                tree=tree,
+                estimated_files=estimated_files,
+                complexity_score=analysis_data.get("complexity_score", 5),
                 required_base_files=analysis_data.get("required_base_files", [])
             )
             
@@ -232,21 +263,21 @@ class VertexAIAdapter(AIServicePort):
             "max_output_tokens": 8192,  # Increased to allow complete architecture proposals
         }
         
-        # Log the prompt being sent
-        logger.info("=" * 80)
-        logger.info("PROMPT SENT TO AI (propose_architectures):")
-        logger.info(prompt[:1000] + "..." if len(prompt) > 1000 else prompt)
-        logger.info("=" * 80)
+        # Log the prompt being sent (DEBUG only)
+        logger.debug("=" * 80)
+        logger.debug("PROMPT SENT TO AI (propose_architectures):")
+        logger.debug(prompt)
+        logger.debug("=" * 80)
         
         try:
             response = self._call_with_retry(prompt, generation_config)
             raw_response = response.text.strip()
             
-            # Log the raw response
-            logger.info("=" * 80)
-            logger.info("RAW AI RESPONSE (propose_architectures):")
-            logger.info(raw_response)
-            logger.info("=" * 80)
+            # Log the raw response (DEBUG only)
+            logger.debug("=" * 80)
+            logger.debug("RAW AI RESPONSE (propose_architectures):")
+            logger.debug(raw_response)
+            logger.debug("=" * 80)
             logger.debug(f"Raw AI response length: {len(raw_response)} chars")
             
             # Clean response - remove markdown code blocks
@@ -287,6 +318,12 @@ class VertexAIAdapter(AIServicePort):
                 else:
                     complexity_value = "low"
                 
+                # Truncate example_structure to max 15 items (Pydantic validation)
+                example_structure = arch_data["example_structure"]
+                if len(example_structure) > 15:
+                    logger.warning(f"Truncating example_structure from {len(example_structure)} to 15 items")
+                    example_structure = example_structure[:15]
+                
                 proposals.append(ArchitectureProposal(
                     name=arch_data["name"],
                     reasoning=arch_data["reasoning"],
@@ -294,7 +331,7 @@ class VertexAIAdapter(AIServicePort):
                     pros=arch_data["pros"],
                     cons=arch_data["cons"],
                     estimated_files=arch_data["estimated_files"],
-                    example_structure=arch_data["example_structure"]
+                    example_structure=example_structure
                 ))
             
             # Get recommended index (default to 0 if not provided)
@@ -324,7 +361,8 @@ class VertexAIAdapter(AIServicePort):
         project_context: Dict
     ) -> List['FileStructure']:
         """
-        Generate file contents using AI for files not found in templates
+        Generate file contents using AI for files not found in templates.
+        Automatically chunks large requests to avoid token limits.
         
         Args:
             files_to_generate: List of file paths to generate
@@ -339,10 +377,52 @@ class VertexAIAdapter(AIServicePort):
             logger.info("No files to generate")
             return []
         
+        # Chunking strategy: divide into batches to avoid token limits
+        CHUNK_SIZE = 7  # Generate max 7 files per request (safe for 16K tokens)
+        total_files = len(files_to_generate)
+        
+        if total_files > CHUNK_SIZE:
+            logger.info(f"🔄 Large batch detected ({total_files} files) - splitting into chunks of {CHUNK_SIZE}")
+            all_generated_files = []
+            
+            # Split into chunks
+            for i in range(0, total_files, CHUNK_SIZE):
+                chunk = files_to_generate[i:i + CHUNK_SIZE]
+                chunk_num = (i // CHUNK_SIZE) + 1
+                total_chunks = (total_files + CHUNK_SIZE - 1) // CHUNK_SIZE
+                
+                logger.info(f"📦 Generating chunk {chunk_num}/{total_chunks} ({len(chunk)} files)...")
+                
+                # Generate this chunk
+                chunk_files = self._generate_files_batch(chunk, project_context)
+                all_generated_files.extend(chunk_files)
+                
+                logger.info(f"✅ Chunk {chunk_num}/{total_chunks} complete ({len(chunk_files)}/{len(chunk)} files)")
+            
+            logger.info(f"🎉 All chunks complete: {len(all_generated_files)}/{total_files} files generated")
+            return all_generated_files
+        
+        # Small batch - generate directly
         logger.info(f"🤖 Generating {len(files_to_generate)} files with AI...")
+        logger.debug(f"Files to generate: {', '.join(files_to_generate)}")
+        
+        return self._generate_files_batch(files_to_generate, project_context)
+    
+    def _generate_files_batch(
+        self,
+        files_to_generate: List[str],
+        project_context: Dict
+    ) -> List['FileStructure']:
+        """
+        Generate a single batch of files (internal method)
+        """
+        from src.domain.entities.project import FileStructure
         
         # Load generation prompt
-        project_root = Path(__file__).parent.parent.parent.parent.parent
+        # Prompts are in /prompts/ at project root (not /backend/prompts/)
+        # From: backend/src/infrastructure/adapters/vertex_ai_adapter.py
+        # To: prompts/generate-files.md
+        project_root = Path(__file__).parent.parent.parent.parent.parent  # Go up to VibeArchitect/
         prompt_path = project_root / "prompts" / "generate-files.md"
         
         if not prompt_path.exists():
@@ -373,9 +453,11 @@ class VertexAIAdapter(AIServicePort):
         logger.debug(f"Files to generate: {files_to_generate}")
         
         # Call AI
+        # Higher token limit for generating multiple files
+        # ~500 tokens per file * 15 files = ~7500 tokens + overhead
         generation_config = {
-            "temperature": 0.4,
-            "max_output_tokens": 8192,
+            "temperature": 0.3,  # Lower temp for more consistent, concise code
+            "max_output_tokens": 16384,  # Increased to handle more files
         }
         
         # Log the prompt being sent
@@ -406,19 +488,49 @@ class VertexAIAdapter(AIServicePort):
                 response_data = json.loads(raw_response)
             except json.JSONDecodeError as e:
                 logger.warning(f"JSON decode failed, attempting repair: {e}")
+                logger.debug(f"Raw response (first 1000 chars): {raw_response[:1000]}")
                 repaired = repair_json(raw_response)
                 response_data = json.loads(repaired)
+                logger.debug(f"Repaired JSON successfully")
             
             # Convert to FileStructure objects
             generated_files = []
+            skipped_files = []
+            
             for file_data in response_data.get("files", []):
+                # Validate required fields
+                if "path" not in file_data:
+                    logger.warning(f"Skipping file without path: {file_data}")
+                    skipped_files.append("unknown (no path)")
+                    continue
+                
+                if "content" not in file_data:
+                    logger.warning(f"Skipping file without content: {file_data.get('path', 'unknown')}")
+                    skipped_files.append(file_data.get('path', 'unknown'))
+                    continue
+                
                 generated_files.append(FileStructure(
                     path=file_data["path"],
                     content=file_data["content"],
                     description=f"AI-generated {Path(file_data['path']).name}"
                 ))
             
-            logger.info(f"✅ Generated {len(generated_files)} files successfully")
+            # Log results
+            expected_count = len(files_to_generate)
+            actual_count = len(generated_files)
+            generated_paths = [f.path for f in generated_files]
+            missing_files = [f for f in files_to_generate if f not in generated_paths]
+            
+            if skipped_files:
+                logger.warning(f"⚠️  Skipped {len(skipped_files)} files due to missing data: {', '.join(skipped_files)}")
+            
+            if actual_count < expected_count:
+                logger.warning(f"⚠️  Generated {actual_count}/{expected_count} files - {expected_count - actual_count} files were lost during generation")
+                logger.warning(f"📋 Expected files: {', '.join(files_to_generate)}")
+                logger.warning(f"✅ Generated files: {', '.join(generated_paths)}")
+                logger.warning(f"❌ Missing files: {', '.join(missing_files)}")
+            else:
+                logger.info(f"✅ Generated {actual_count} files successfully")
             
             return generated_files
             
@@ -469,7 +581,9 @@ class VertexAIAdapter(AIServicePort):
         prompt = prompt.replace("{{TREE}}", tree_str)
         
         try:
-            response = self._call_with_retry(
+            # Run in thread to allow true parallelization
+            response = await asyncio.to_thread(
+                self._call_with_retry,
                 prompt,
                 generation_config={
                     "temperature": 0.5,
@@ -512,7 +626,8 @@ class VertexAIAdapter(AIServicePort):
         prompt = prompt.replace("{{TREE}}", tree_str)
         
         try:
-            response = self._call_with_retry(
+            response = await asyncio.to_thread(
+                self._call_with_retry,
                 prompt,
                 generation_config={
                     "temperature": 0.4,
@@ -554,7 +669,8 @@ class VertexAIAdapter(AIServicePort):
         prompt = prompt.replace("{{TREE}}", tree_str)
         
         try:
-            response = self._call_with_retry(
+            response = await asyncio.to_thread(
+                self._call_with_retry,
                 prompt,
                 generation_config={
                     "temperature": 0.3,
@@ -617,7 +733,8 @@ Be specific and relevant to the project description and tech stack.
 Output ONLY valid JSON, no markdown wrapper."""
 
         try:
-            response = self._call_with_retry(
+            response = await asyncio.to_thread(
+                self._call_with_retry,
                 prompt,
                 generation_config={
                     "temperature": 0.4,
@@ -656,7 +773,16 @@ Output ONLY valid JSON, no markdown wrapper."""
     
     def _generate_mock_boilerplate(self, request: ProjectRequest) -> Boilerplate:
         """Generate mock boilerplate using templates + mock docs"""
-        project_name = request.description.lower().replace(" ", "-")[:30]
+        import re
+        from datetime import datetime
+        
+        # Create slug from description (remove special chars, limit length)
+        slug = re.sub(r'[^a-z0-9]+', '-', request.description.lower())
+        slug = re.sub(r'-+', '-', slug).strip('-')[:40]
+        
+        # Add timestamp for uniqueness
+        timestamp = datetime.utcnow().strftime('%Y%m%d-%H%M%S')
+        project_name = f"{slug}-{timestamp}"
         
         # Get template based on framework and language
         framework = request.tech_preferences.framework if hasattr(request.tech_preferences, 'framework') else "nextjs"
@@ -1298,7 +1424,7 @@ src/infrastructure/
 {f'      ├─ {backend_service}.auth.{language == "typescript" and "ts" or "js"} → Authentication' if backend_service != "none" else ''}
 {f'      ├─ {backend_service}.helpers.{language == "typescript" and "ts" or "js"} → CRUD operations' if backend_service != "none" else ''}
 {f'      └─ {backend_service}.types.ts → Type definitions' if backend_service != "none" and language == "typescript" else ''}
-\`\`\`
+```
 
 ## Key Relationships
 
@@ -1321,13 +1447,13 @@ src/infrastructure/
 
 ### Usage Example
 
-\`\`\`{language}
+```{language}
 // Import auth helpers
 import {{ signIn, signUp }} from '@/infrastructure/services/{backend_service}.auth';
 
 // Import CRUD helpers  
 import {{ createDocument, getDocument }} from '@/infrastructure/services/{backend_service}.helpers';
-\`\`\`
+```
 
 ### Clean Architecture Benefits
 
@@ -1504,7 +1630,8 @@ import {{ createDocument, getDocument }} from '@/infrastructure/services/{backen
         prompt = prompt.replace("{{ARCHITECTURE}}", architecture)
         
         try:
-            response = self._call_with_retry(
+            response = await asyncio.to_thread(
+                self._call_with_retry,
                 prompt,
                 generation_config={
                     "temperature": 0.4,
@@ -1542,7 +1669,8 @@ import {{ createDocument, getDocument }} from '@/infrastructure/services/{backen
         prompt = prompt.replace("{{TREE}}", tree_str)
         
         try:
-            response = self._call_with_retry(
+            response = await asyncio.to_thread(
+                self._call_with_retry,
                 prompt,
                 generation_config={
                     "temperature": 0.3,
@@ -1575,7 +1703,8 @@ import {{ createDocument, getDocument }} from '@/infrastructure/services/{backen
         prompt = prompt.replace("{{ARCHITECTURE}}", architecture)
 
         try:
-            response = self._call_with_retry(
+            response = await asyncio.to_thread(
+                self._call_with_retry,
                 prompt,
                 generation_config={
                     "temperature": 0.4,

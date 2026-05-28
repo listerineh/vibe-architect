@@ -11,6 +11,8 @@ from src.application.use_cases.preview_boilerplate import PreviewBoilerplateUseC
 from src.application.use_cases.analyze_project import AnalyzeProjectUseCase
 from src.application.use_cases.generate_adaptive_boilerplate import GenerateAdaptiveBoilerplateUseCase
 from src.presentation.api.routes import create_router
+from src.presentation.api.routers.projects import router as projects_router
+from src.infrastructure.config.firebase_config import initialize_firebase
 from pathlib import Path
 
 
@@ -65,6 +67,16 @@ def create_app() -> FastAPI:
     
     router = create_router(generate_use_case, preview_use_case, analyze_use_case, adaptive_use_case, cache)
     app.include_router(router)
+    
+    # Initialize Firebase on startup
+    try:
+        initialize_firebase()
+        logger.info("Firebase initialized successfully")
+    except Exception as e:
+        logger.warning(f"Firebase initialization failed: {e}. Auth features will be unavailable.")
+    
+    # Register project routes
+    app.include_router(projects_router, prefix="/api/v1")
     
     @app.get("/")
     async def root():

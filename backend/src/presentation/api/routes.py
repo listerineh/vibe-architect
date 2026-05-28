@@ -1,6 +1,7 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from loguru import logger
+from src.presentation.api.middleware.auth_middleware import get_current_user_optional
 from src.presentation.api.schemas import (
     ProjectRequestDTO, 
     BoilerplateResponseDTO, 
@@ -276,11 +277,19 @@ Refined description:"""
             raise HTTPException(status_code=500, detail=f"Failed to generate adaptive boilerplate: {str(e)}")
     
     @router.post("/generate-streaming")
-    async def generate_streaming(request_dto: ProjectRequestDTO):
+    async def generate_streaming(
+        request_dto: ProjectRequestDTO,
+        current_user: dict = Depends(get_current_user_optional)
+    ):
         """Generate boilerplate with real-time progress streaming (SSE)"""
         import json
         import asyncio
         from src.presentation.api.streaming_schemas import StreamEvent, StreamEventType
+        
+        logger.info("=== STREAMING GENERATION REQUEST ===")
+        logger.debug(f"Description: {request_dto.description}")
+        logger.debug(f"Tech Preferences: {request_dto.tech_preferences.model_dump()}")
+        logger.info(f"Architecture: {request_dto.architecture or 'Not selected (will propose)'}")
         
         async def event_generator():
             try:
@@ -335,9 +344,20 @@ Refined description:"""
                     }
                 ).to_sse()
                 
-                # Note: In a real implementation, we'd wait for user selection here
-                # For now, we'll use the recommended architecture
-                selected_architecture = arch_analysis.recommended
+                # STOP HERE if no architecture selected - wait for user choice
+                if not request_dto.architecture:
+                    logger.info("⏸️  No architecture selected - waiting for user choice")
+                    yield StreamEvent(
+                        event=StreamEventType.PROGRESS,
+                        progress=30,
+                        message="Waiting for architecture selection...",
+                        data={"waiting": True}
+                    ).to_sse()
+                    return  # Stop streaming here
+                
+                # Continue with user-selected architecture
+                selected_architecture = request_dto.architecture
+                logger.info(f"✅ Architecture selected by user: {selected_architecture}")
                 
                 yield StreamEvent(
                     event=StreamEventType.ARCHITECTURE_SELECTED,
@@ -400,13 +420,8 @@ Refined description:"""
                 
                 # Consume events from queue while generation is running
                 boilerplate = None
-                progress_map = {
-                    "doc_readme_generated": 73,
-                    "doc_architecture_generated": 76,
-                    "doc_cursorrules_generated": 79,
-                    "doc_contributing_generated": 82,
-                    "doc_knowledge_graph_generated": 85
-                }
+                doc_count = 0
+                total_docs = 5  # README, ARCHITECTURE, .cursorrules, CONTRIBUTING, KNOWLEDGE_GRAPH
                 
                 while generation_thread.is_alive() or not doc_event_queue.empty():
                     try:
@@ -415,13 +430,15 @@ Refined description:"""
                         if event_type == "result":
                             boilerplate = data
                             break
-                        elif event_type in progress_map:
+                        elif event_type.startswith("doc_"):
+                            doc_count += 1
+                            # Keep progress at 70% base, just show completion messages
                             yield StreamEvent(
                                 event=StreamEventType[event_type.upper()],
-                                progress=progress_map[event_type],
-                                message=data
+                                progress=70,  # Fixed at 70% during parallel doc generation
+                                message=f"{data} ({doc_count}/{total_docs})"
                             ).to_sse()
-                            await asyncio.sleep(0.2)
+                            await asyncio.sleep(0.1)
                     except queue.Empty:
                         await asyncio.sleep(0.1)
                         continue
@@ -447,25 +464,103 @@ Refined description:"""
                 
                 zip_buffer = generate_use_case._file_generator.create_archive(boilerplate, domain_request)
                 session_id = cache.set(boilerplate, zip_buffer)
+                logger.info(f"💾 Session saved to cache: {session_id}")
+                logger.debug(f"📦 ZIP buffer size: {zip_buffer.getbuffer().nbytes} bytes")
+                
+                # Auto-save to Firestore if user is authenticated
+                project_id = None
+                if current_user:
+                    try:
+                        user_id = current_user['uid']
+                        logger.info(f"🔐 User authenticated: {user_id} - Auto-saving project...")
+                        
+                        from src.application.services.project_service import ProjectService
+                        project_service = ProjectService()
+                        
+                        # Prepare complete metadata for project details page
+                        metadata = {
+                            # Project info
+                            'description': domain_request.description,
+                            'project_size': analysis.size.value if hasattr(analysis.size, 'value') else str(analysis.size),
+                            'complexity_score': analysis.complexity_score,
+                            
+                            # Tech stack
+                            'tech_stack': {
+                                'framework': domain_request.tech_preferences.framework,
+                                'language': domain_request.tech_preferences.language,
+                                'css': domain_request.tech_preferences.css.value if domain_request.tech_preferences.css else 'none',
+                                'backend_service': domain_request.tech_preferences.backend_service.value if domain_request.tech_preferences.backend_service else 'none',
+                            },
+                            
+                            # Architecture
+                            'architecture': selected_architecture,
+                            
+                            # File structure (complete with descriptions)
+                            'file_structure': [
+                                {
+                                    'path': f.path,
+                                    'description': f.description or ''
+                                } for f in (boilerplate.file_structure or [])
+                            ],
+                            
+                            # Cursor rules (content is the full .cursorrules file)
+                            'cursor_rules': {
+                                'content': boilerplate.cursor_rules.content if boilerplate.cursor_rules else '',
+                                'focus_areas': boilerplate.cursor_rules.focus_areas if boilerplate.cursor_rules else []
+                            } if boilerplate.cursor_rules else {},
+                            
+                            # Metadata
+                            'tree': analysis.tree if analysis else [],
+                            'focus_areas': boilerplate.cursor_rules.focus_areas if boilerplate.cursor_rules else [],
+                            'known_limitations': boilerplate.known_limitations or [],
+                            'cost_optimizations': boilerplate.cost_optimizations or []
+                        }
+                        
+                        file_count = len(boilerplate.file_structure) if boilerplate.file_structure else 0
+                        
+                        project_id = await project_service.save_project(
+                            user_id=user_id,
+                            session_id=session_id,
+                            project_name=boilerplate.project_metadata.name,
+                            framework=domain_request.tech_preferences.framework,
+                            architecture=selected_architecture,
+                            zip_data=zip_buffer,
+                            metadata=metadata,
+                            file_count=file_count
+                        )
+                        
+                        logger.info(f"✅ Project auto-saved: {project_id}")
+                    except Exception as save_error:
+                        logger.warning(f"⚠️  Auto-save failed (non-critical): {save_error}")
+                        # Don't fail the generation if auto-save fails
+                else:
+                    logger.debug("👤 No user authenticated - skipping auto-save")
                 
                 # Step 8: Complete
                 response_dto = DTOMapper.to_boilerplate_dto(boilerplate)
                 response_dto.session_id = session_id
                 
+                completion_data = {
+                    "session_id": session_id,
+                    "project_name": boilerplate.project_metadata.name,
+                    "file_structure": [{"path": f.path} for f in boilerplate.file_structure],
+                    "cursor_rules": {
+                        "focus_areas": boilerplate.cursor_rules.focus_areas
+                    },
+                    "known_limitations": boilerplate.known_limitations,
+                    "cost_optimizations": boilerplate.cost_optimizations
+                }
+                
+                # Add project_id if auto-saved
+                if project_id:
+                    completion_data["project_id"] = project_id
+                    completion_data["auto_saved"] = True
+                
                 yield StreamEvent(
                     event=StreamEventType.COMPLETE,
                     progress=100,
-                    message="Generation complete!",
-                    data={
-                        "session_id": session_id,
-                        "project_name": boilerplate.project_metadata.name,
-                        "file_structure": [{"path": f.path} for f in boilerplate.file_structure],
-                        "cursor_rules": {
-                            "focus_areas": boilerplate.cursor_rules.focus_areas
-                        },
-                        "known_limitations": boilerplate.known_limitations,
-                        "cost_optimizations": boilerplate.cost_optimizations
-                    }
+                    message="Generation complete!" + (" (Auto-saved)" if project_id else ""),
+                    data=completion_data
                 ).to_sse()
                 
             except Exception as e:

@@ -33,33 +33,60 @@ The complete project structure is:
 Generate content for these files:
 {{FILES_TO_GENERATE}}
 
+## ⚠️ CRITICAL: Files to EXCLUDE
+
+**NEVER generate or include these in your output:**
+- `node_modules/` - Dependencies folder
+- `.next/` - Next.js build output
+- `dist/` or `build/` - Build output folders
+- `.git/` - Git repository files
+- `package-lock.json` or `yarn.lock` - Lock files (too large)
+- `.env` files - Environment variables (security)
+- Any binary files or images
+- Cache folders (`.cache/`, `.turbo/`, etc.)
+
+**ONLY generate source code files** that are part of the boilerplate starter project.
+
 ## Requirements
 
-1. **Production-Ready Code**:
-   - Clean, well-structured code
-   - Proper imports and exports
-   - Type-safe (if TypeScript)
-   - Follow framework best practices
+### 🎯 CRITICAL: Generate BOILERPLATE Code Only
 
-2. **Consistency**:
+This is a **STARTER PROJECT** - generate minimal, foundational code that developers will extend.
+
+1. **Code Length Limits** (STRICT):
+   - **SMALL files**: 20-50 lines (components, utilities, types)
+   - **MEDIUM files**: 50-80 lines (pages, services, hooks)
+   - **NEVER exceed**: 100 lines per file
+   - Use `// TODO: Implement X` for complex features
+
+2. **What to Include** ✅:
+   - Essential imports and exports
+   - Type definitions and interfaces
+   - Basic component/function structure
+   - Placeholder functions with proper signatures
+   - Simple, foundational logic only
+
+3. **What to AVOID** ❌:
+   - Full implementations of complex algorithms
+   - Extensive validation logic
+   - Multiple edge case handling
+   - Long comment blocks or documentation
+   - Complete business logic
+
+4. **Consistency**:
    - Match the project structure
    - Use consistent naming conventions
    - Import from correct paths
 
-3. **Completeness**:
-   - Include all necessary imports
-   - Add proper types/interfaces
-   - Include basic error handling where needed
-
-4. **Comments**:
-   - Only add comments where truly necessary
-   - Prefer self-documenting code
-   - No placeholder comments like "// Add logic here"
-
 5. **Framework-Specific**:
    - **Next.js**: Use app router conventions, server/client components appropriately
-   - **React**: Use functional components, hooks, proper state management
+   - **React**: Use Vite as build tool (NOT Next.js), functional components, hooks, proper state management
    - **Astro**: Use Astro components, proper frontmatter
+   
+6. **Build Tool Selection**:
+   - **React projects**: Use Vite (`vite.config.ts`, `index.html` at root)
+   - **Next.js projects**: Use Next.js conventions (`next.config.js`, app router)
+   - DO NOT mix Next.js conventions in plain React projects
 
 ## Output Format
 
@@ -82,11 +109,21 @@ Return ONLY valid JSON (no markdown, no code blocks):
 
 ## Important Rules
 
-1. **Escape properly**: Use `\n` for newlines, `\"` for quotes in JSON
-2. **Complete files**: Each file must be fully functional
+1. **JSON Safety** (CRITICAL):
+   - **ESCAPE** all special characters: `\n` for newlines, `\"` for quotes, `\\` for backslashes
+   - **TEST** your JSON is valid before responding
+   - **NO** unescaped quotes, newlines, or backslashes in content strings
+
+2. **Boilerplate Code**:
+   - Keep files **SHORT** (20-80 lines max)
+   - Use `// TODO: Implement X` for complex features
+   - Focus on **structure and types**, not full implementations
+
 3. **Correct imports**: Use proper import paths based on project structure
-4. **No placeholders**: Don't use "// TODO" or "// Implement this"
-5. **Match complexity**: {{SIZE}} projects should have appropriate complexity level
+
+4. **Match complexity**: {{SIZE}} projects should have appropriate complexity level
+
+5. **Generate ALL files**: Every file in the list must be generated
 
 ## Examples
 

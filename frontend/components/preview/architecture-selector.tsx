@@ -9,13 +9,15 @@ interface ArchitectureSelectorProps {
   recommended: string;
   onSelect: (architecture: string) => void;
   selectedArchitecture?: string;
+  onApply?: () => void;
 }
 
 export function ArchitectureSelector({
   architectures,
   recommended,
   onSelect,
-  selectedArchitecture
+  selectedArchitecture,
+  onApply
 }: ArchitectureSelectorProps) {
   const getComplexityColor = (complexity: string) => {
     switch (complexity) {
@@ -154,6 +156,23 @@ export function ArchitectureSelector({
           );
         })}
       </div>
+
+      {/* Apply Button */}
+      {selectedArchitecture && onApply && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex justify-center mt-6"
+        >
+          <button
+            onClick={onApply}
+            className="px-8 py-4 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-xl font-semibold hover:shadow-lg hover:shadow-indigo-500/50 transition-all flex items-center gap-2"
+          >
+            <Check className="w-5 h-5" />
+            Generate with {selectedArchitecture}
+          </button>
+        </motion.div>
+      )}
     </div>
   );
 }
