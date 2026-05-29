@@ -4,7 +4,7 @@
 
 VibeArchitect generates production-ready project boilerplates optimized for AI-assisted development tools like Cursor and Windsurf. Uses **multiple specialized AI calls** to create high-quality documentation, complete backend integration, and context-aware architectures.
 
-**Latest Update (v0.2.2-alpha)**: Now with **user authentication**, **project management**, **file tree visualization**, and **Cloud Run deployment ready**!
+**Latest Update (v2.0.3-alpha)**: Now with **user authentication**, **project management**, **file tree visualization**, **Cloud Run deployment**, and **Vercel frontend deployment**!
 
 ## 🎯 Core Features
 
@@ -371,4 +371,4 @@ MIT License - feel free to use this for your projects!
 
 **Built with ❤️ for AI-assisted development**
 
-**Version**: v0.2.2-alpha | **Last Updated**: May 28, 2026 | **Status**: Alpha Release 🚀
+**Version**: v2.0.3-alpha | **Last Updated**: May 29, 2026 | **Status**: Alpha Release 🚀

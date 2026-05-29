@@ -39,8 +39,11 @@ class Settings(BaseSettings):
         return v
     
     def get_cors_origins_list(self) -> list[str]:
-        """Convert cors_origins string to list"""
-        return [origin.strip() for origin in self.cors_origins.split(',')]
+        """Convert cors_origins string to list, supporting multiple separators"""
+        import re
+        # Split by comma, semicolon, or pipe
+        origins = re.split(r'[,;|]', self.cors_origins)
+        return [origin.strip() for origin in origins if origin.strip()]
     
     class Config:
         env_file = ".env"

@@ -1,0 +1,31 @@
+# CODEOWNERS file for VibeArchitect
+# This file defines individuals or teams that are responsible for code in this repository.
+# More info: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything in the repo
+* @listerineh
+
+# Backend
+/backend/ @listerineh
+/prompts/ @listerineh
+
+# Frontend
+/frontend/ @listerineh
+
+# Infrastructure & CI/CD
+/.github/ @listerineh
+/Dockerfile @listerineh
+/docker-compose.yml @listerineh
+
+# Documentation
+/README.md @listerineh
+/CHANGELOG.md @listerineh
+/DEPLOYMENT.md @listerineh
+/PROJECT_SUMMARY.md @listerineh
+/docs/ @listerineh
+
+# Configuration files
+*.json @listerineh
+*.yaml @listerineh
+*.yml @listerineh
+.env* @listerineh

@@ -2,6 +2,38 @@
 
 All notable changes to VibeArchitect will be documented in this file.
 
+## [v2.0.3-alpha] - 2026-05-29
+
+### 🚀 Production Deployment
+
+#### Backend (Cloud Run)
+- ✅ Deployed to Google Cloud Run
+- ✅ Vertex AI integration working
+- ✅ Firebase Admin SDK configured
+- ✅ CORS configured for production
+- ✅ Multi-separator support for CORS origins (`,`, `;`, `|`)
+- ✅ All endpoints tested and operational
+
+#### Frontend (Vercel)
+- ✅ Deployed to Vercel
+- ✅ Production environment variables configured
+- ✅ Connected to Cloud Run backend
+- ✅ Firebase authentication ready
+
+#### Bug Fixes
+- 🐛 Fixed enum `.value` error in routes
+- 🐛 Added missing `firebase-admin` dependency
+- 🐛 Fixed Docker build to include `/prompts` folder
+- 🐛 Fixed TypeScript errors in frontend forms
+- 🐛 Fixed CORS preflight requests
+
+#### CI/CD
+- ✅ GitHub Actions workflows created
+- ✅ Auto-deploy on push to main
+- ✅ Separate workflows for backend and frontend
+
+---
+
 ## [v0.2.2-alpha] - 2026-05-28
 
 ### 🎉 Major Features - User Management & Cloud Deployment
@@ -254,4 +286,4 @@ All notable changes to VibeArchitect will be documented in this file.
 
 ---
 
-**Version**: v0.2.2-alpha | **Last Updated**: May 28, 2026
+**Version**: v2.0.3-alpha | **Last Updated**: May 29, 2026

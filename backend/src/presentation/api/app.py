@@ -41,7 +41,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="VibeArchitect API",
         description="AI-First Boilerplate Generator",
-        version="v0.2.2-alpha"
+        version="v2.0.3-alpha"
     )
     
     app.add_middleware(
@@ -82,7 +82,7 @@ def create_app() -> FastAPI:
     async def root():
         return {
             "service": "VibeArchitect API",
-            "version": "v0.2.2-alpha",
+            "version": "v2.0.3-alpha",
             "status": "operational"
         }
     

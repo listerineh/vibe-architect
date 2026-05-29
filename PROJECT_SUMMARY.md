@@ -383,11 +383,19 @@ Built for the **Build with AI** event by Google Cloud.
 ---
 
 **Project Status:** ✅ Production Ready  
-**Last Updated:** 2026-05-28  
-**Version:** v0.2.2-alpha  
+**Last Updated:** 2026-05-29  
+**Version:** v2.0.3-alpha  
 **License:** MIT
 
-## 🎯 Recent Major Updates (v0.2.2-alpha)
+## 🎯 Recent Major Updates (v2.0.3-alpha)
+
+### Production Deployment (May 29, 2026)
+- ✅ Backend deployed to Google Cloud Run
+- ✅ Frontend deployed to Vercel
+- ✅ CI/CD pipelines configured
+- ✅ CORS and authentication working
+
+## 🎯 Previous Updates (v0.2.2-alpha)
 
 ### Multiple Specialized AI Calls (May 9, 2026)
 - ✅ Separated AI generation into 4 parallel calls for better quality
