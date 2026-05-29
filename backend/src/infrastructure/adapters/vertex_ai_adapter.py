@@ -1508,7 +1508,7 @@ import {{ createDocument, getDocument }} from '@/infrastructure/services/{backen
                 path="package.json",
                 content="""{
   "name": "mock-project",
-  "version": "0.1.0",
+  "version": "0.2.2-alpha",
   "private": true,
   "scripts": {
     "dev": "next dev",

@@ -383,11 +383,11 @@ Built for the **Build with AI** event by Google Cloud.
 ---
 
 **Project Status:** ✅ Production Ready  
-**Last Updated:** 2026-05-09  
-**Version:** 2.0.0  
+**Last Updated:** 2026-05-28  
+**Version:** v0.2.2-alpha  
 **License:** MIT
 
-## 🎯 Recent Major Updates (v2.0.0)
+## 🎯 Recent Major Updates (v0.2.2-alpha)
 
 ### Multiple Specialized AI Calls (May 9, 2026)
 - ✅ Separated AI generation into 4 parallel calls for better quality

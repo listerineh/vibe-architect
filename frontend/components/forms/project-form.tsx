@@ -39,7 +39,6 @@ export function ProjectForm({ onPreview, onGenerate, isLoading }: ProjectFormPro
     try {
       const result = await refineDescription({
         description,
-        google_mode: googleMode,
         tech_preferences: techPrefs,
       });
       setDescription(result.refined);

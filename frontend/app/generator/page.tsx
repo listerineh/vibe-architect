@@ -155,7 +155,7 @@ export default function GeneratorPage() {
                 <div className="flex items-center gap-2 mb-2">
                   <h3 className="text-sm font-semibold text-zinc-100">Alpha Demo</h3>
                   <span className="px-2 py-0.5 text-xs font-medium bg-indigo-500/20 text-indigo-300 rounded-full border border-indigo-500/30">
-                    v0.2.1-alpha
+                    v0.2.2-alpha
                   </span>
                 </div>
                 <p className="text-sm text-zinc-400 leading-relaxed">

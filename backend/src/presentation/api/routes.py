@@ -126,7 +126,7 @@ Refined description:"""
             
             # Convert to response DTO
             response = ProjectAnalysisResponseDTO(
-                size=analysis.size.value,
+                size=analysis.size,
                 reasoning=analysis.reasoning,
                 tree=analysis.tree,
                 estimated_files=analysis.estimated_files,
@@ -169,7 +169,7 @@ Refined description:"""
                 ArchitectureProposalDTO(
                     name=prop.name,
                     reasoning=prop.reasoning,
-                    complexity=prop.complexity.value,
+                    complexity=prop.complexity,
                     pros=prop.pros,
                     cons=prop.cons,
                     estimated_files=prop.estimated_files,

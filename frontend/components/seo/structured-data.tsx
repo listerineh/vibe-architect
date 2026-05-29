@@ -32,7 +32,7 @@ export function StructuredData() {
       "Optimized for AI-assisted development"
     ],
     "screenshot": "https://vibearchitect.dev/og-image.png",
-    "softwareVersion": "0.2.1-alpha",
+    "softwareVersion": "0.2.2-alpha",
     "aggregateRating": {
       "@type": "AggregateRating",
       "ratingValue": "5.0",

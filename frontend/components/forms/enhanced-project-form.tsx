@@ -14,14 +14,14 @@ interface EnhancedProjectFormProps {
 }
 
 const frameworks = [
-  { value: 'nextjs', label: 'Next.js', desc: 'React Framework' },
-  { value: 'react', label: 'React', desc: 'UI Library' },
-  { value: 'astro', label: 'Astro', desc: 'Static Site' },
+  { value: 'nextjs', label: 'Next.js', desc: 'React Framework', icon: '▲' },
+  { value: 'react', label: 'React', desc: 'UI Library', icon: '⚛️' },
+  { value: 'astro', label: 'Astro', desc: 'Static Site', icon: '🚀' },
 ];
 
 const languages = [
-  { value: 'typescript', label: 'TypeScript', desc: 'Type-safe' },
-  { value: 'javascript', label: 'JavaScript', desc: 'Dynamic' },
+  { value: 'typescript', label: 'TypeScript', desc: 'Type-safe', icon: '📘' },
+  { value: 'javascript', label: 'JavaScript', desc: 'Dynamic', icon: '📙' },
 ];
 
 export function EnhancedProjectForm({ onPreview, onGenerate, isLoading, hasProcessed }: EnhancedProjectFormProps) {

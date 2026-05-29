@@ -2,7 +2,129 @@
 
 All notable changes to VibeArchitect will be documented in this file.
 
-## [3.0.0] - 2026-05-27
+## [v0.2.2-alpha] - 2026-05-28
+
+### 🎉 Major Features - User Management & Cloud Deployment
+
+#### User Authentication & Project Management
+- **Firebase Authentication**: Google Sign-In integration
+  - Secure authentication flow with Firebase Auth
+  - Protected routes requiring authentication
+  - User context management across the app
+- **Project History**: Auto-save all generated projects
+  - Projects automatically saved to Firebase Storage
+  - Firestore metadata storage (name, framework, architecture, file count, etc.)
+  - Personal project dashboard at `/projects`
+- **Project Details Page**: Rich project information display
+  - View complete project metadata
+  - Interactive file tree visualization
+  - Tech stack badges and architecture info
+  - Download projects anytime from history
+  - Creation date and file statistics
+
+#### Interactive File Tree Component
+- **FileTree Component**: Hierarchical file structure visualization
+  - Expandable/collapsable folders
+  - File type icons with color coding (`.tsx`, `.js`, `.json`, `.md`, etc.)
+  - Auto-expansion of first 2 levels
+  - Smooth animations and hover effects
+  - Indentation-based hierarchy display
+
+#### Cloud Run Deployment Configuration
+- **Docker Setup**: Production-ready Dockerfile
+  - Python 3.12 slim base image
+  - Non-root user for security
+  - Health check endpoint
+  - Optimized layer caching
+- **Deployment Scripts**: One-command deployment
+  - `deploy.sh` for quick Cloud Run deployment
+  - `cloudbuild.yaml` for CI/CD automation
+  - Comprehensive `.dockerignore` for build optimization
+- **Environment Configuration**: Production-ready settings
+  - Updated `.env.example` with Cloud Run variables
+  - CORS configuration for Vercel integration
+  - Dynamic environment variable support
+
+#### UI/UX Improvements
+- **Analysis Phase Indicator**: Dedicated UI for initial project analysis
+  - Sparkle icon with pulse animation
+  - Three-step progress indicators
+  - Gradient background with backdrop blur
+  - Clear messaging before architecture selection
+- **Progress Bar Optimization**: Only shows during actual generation
+  - Prevents confusion with restarting progress
+  - Clearer separation between analysis and generation phases
+
+#### Backend Enhancements
+- **Skill Detection Logging**: Detailed logging for backend service skills
+  - Debug logs for backend service detection
+  - Skill addition confirmation logs
+  - File count tracking per skill
+- **Example Structure Validation**: Automatic truncation to 15 items
+  - Prevents Pydantic validation errors
+  - Warning logs when truncating
+  - Maintains most important files in examples
+- **Prompt Improvements**: Better AI instructions
+  - Explicit exclusion of `node_modules/`, `.next/`, `dist/`, etc.
+  - Vite as default for React projects (not Next.js)
+  - Clear build tool selection guidelines
+
+### 🔧 Technical Improvements
+- **Firebase Integration**: Complete backend integration
+  - Firebase Admin SDK for authentication
+  - Firestore for metadata storage
+  - Firebase Storage for ZIP files
+  - Security rules for user data isolation
+- **Type Safety**: Enhanced TypeScript types
+  - `ProjectDetails` interface with complete metadata
+  - Proper typing for file tree structure
+  - Auth context types
+- **Error Handling**: Improved error management
+  - Graceful handling of missing skills
+  - Validation error prevention
+  - User-friendly error messages
+
+### 📊 Performance & Cost
+- **Auto-Save**: No manual save required
+  - Projects saved immediately after generation
+  - Reduces user friction
+  - Enables project history feature
+- **Firebase Free Tier**: Cost-effective storage
+  - 5GB storage free
+  - 1GB/day download free
+  - Firestore 50K reads/day free
+
+### 🎨 UI Components
+- **New Components**:
+  - `FileTree`: Interactive file structure display
+  - Analysis phase indicator with animations
+  - Project details page layout
+  - Project card grid for dashboard
+- **Design Consistency**:
+  - Zinc color palette throughout
+  - Indigo/purple gradients
+  - Smooth Framer Motion animations
+  - Responsive layouts
+
+### 📝 Documentation
+- **DEPLOYMENT.md**: Complete deployment guide
+  - Cloud Run setup instructions
+  - Vercel deployment steps
+  - Environment variable configuration
+  - Cost optimization tips
+  - Monitoring and troubleshooting
+- **Updated README**: New features documented
+- **Updated Architecture Docs**: Deployment section added
+
+### 🐛 Bug Fixes
+- Fixed infinite API call loop in project details page
+- Fixed Pydantic validation error for example_structure > 15 items
+- Fixed backend service skill detection logic
+- Improved CORS configuration for production
+
+---
+
+## [v0.2.1-alpha] - 2026-05-27
 
 ### 🎉 Major Features - Adaptive Architecture & Real-Time Streaming
 
@@ -98,14 +220,14 @@ All notable changes to VibeArchitect will be documented in this file.
 - **Responsive Layout**: Works on mobile, tablet, and desktop
 
 ### 📝 Documentation Updates
-- Updated README.md to v3.0.0
+- Updated README.md to v0.2.1-alpha
 - Added architecture system documentation
 - Included streaming flow diagrams
 - Updated roadmap with completed Phase 3
 
 ---
 
-## [2.0.0] - 2026-05-09
+## [v0.2.0-alpha] - 2026-05-09
 
 ### Added
 - Multiple specialized AI calls (4 parallel)
@@ -118,7 +240,7 @@ All notable changes to VibeArchitect will be documented in this file.
 
 ---
 
-## [1.0.0] - 2026-04-15
+## [v0.1.0-alpha] - 2026-04-15
 
 ### Initial Release
 - Basic Next.js template generation
@@ -132,4 +254,4 @@ All notable changes to VibeArchitect will be documented in this file.
 
 ---
 
-**Version**: 3.0.0 | **Last Updated**: May 27, 2026
+**Version**: v0.2.2-alpha | **Last Updated**: May 28, 2026
